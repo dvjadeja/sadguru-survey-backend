@@ -10,7 +10,7 @@
   "scripts": {
     "dev": "ts-node-dev --respawn index.ts",
     "build": "tsc ",
-    "start": "node index.js"
+    "start": "node dist/index.js"
   },
   "author": "dvjadeja",
   "license": "ISC",
