@@ -92,7 +92,7 @@ export const createVehicle = async (req: Request, res: Response) => {
       .object({
         provider: z.string().optional(),
         policyNumber: z.string().optional(),
-        expirationDate: z.date().optional(),
+        expirationDate: z.string().optional(),
       })
       .optional(),
   });
