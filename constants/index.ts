@@ -8,3 +8,8 @@ export const VEHICLE_STATUS = {
   INACTIVE: 'INACTIVE',
   UNDER_MAINTENANCE: 'UNDER_MAINTENANCE',
 };
+
+export const VEHICLE_TAX_TYPE = {
+  LTT: 'LTT',
+  OTT: 'OTT',
+};

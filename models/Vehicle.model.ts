@@ -1,16 +1,15 @@
 import { model, Schema } from 'mongoose';
-import { VEHICLE_STATUS } from '../constants';
+import { VEHICLE_STATUS, VEHICLE_TAX_TYPE } from '../constants';
 
 const vehicleSchema = new Schema(
   {
     make: String,
     model: String,
-    year: Number,
     vin: String,
     registration: {
       plateNumber: {
         type: String,
-        required: true
+        required: true,
       },
     },
     currentStatus: {
@@ -26,10 +25,33 @@ const vehicleSchema = new Schema(
       fuelCapacity: Number,
       availableFuel: Number,
     },
-    insurance: {
-      provider: String,
-      policyNumber: String,
-      expirationDate: Date,
+    insuranceExpirationDate: {
+      type: Date,
+      required: true,
+    },
+    registrationDate: {
+      type: Date,
+      required: true,
+    },
+    fitness: {
+      type: Date,
+      required: true,
+    },
+    tax: {
+      taxType: {
+        type: String,
+        enum: [VEHICLE_TAX_TYPE.LTT, VEHICLE_TAX_TYPE.OTT],
+        required: true,
+      },
+      lastTaxDate: Date,
+    },
+    puc: {
+      type: Date,
+      required: true,
+    },
+    permit: {
+      type: Date,
+      required: true,
     },
     createdBy: {
       type: Schema.Types.ObjectId,

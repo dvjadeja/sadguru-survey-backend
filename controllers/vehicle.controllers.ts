@@ -14,7 +14,7 @@ export const listVehicle = async (req: Request, res: Response) => {
       [
         'make',
         'model',
-        'year',
+        'registrationDate',
         'fuel.availableFuel',
         'registration.plateNumber',
         'currentStatus',
@@ -76,25 +76,30 @@ export const createVehicle = async (req: Request, res: Response) => {
   const vehicleValidator = z.object({
     make: z.string().optional(),
     model: z.string().optional(),
-    year: z.number().optional(),
     vin: z.string().optional(),
     registration: z.object({
       plateNumber: z.string(),
     }),
-    currentStatus: z.enum([VEHICLE_STATUS.ACTIVE, VEHICLE_STATUS.INACTIVE]),
+    currentStatus: z.enum([
+      VEHICLE_STATUS.ACTIVE,
+      VEHICLE_STATUS.INACTIVE,
+      VEHICLE_STATUS.UNDER_MAINTENANCE,
+    ]),
     fuel: z
       .object({
         fuelCapacity: z.number().optional(),
         availableFuel: z.number().optional(),
       })
       .optional(),
-    insurance: z
-      .object({
-        provider: z.string().optional(),
-        policyNumber: z.string().optional(),
-        expirationDate: z.string().optional(),
-      })
-      .optional(),
+    insuranceExpirationDate: z.string(),
+    registrationDate: z.string(),
+    fitness: z.string(),
+    tax: z.object({
+      taxType: z.string(),
+      lastTaxDate: z.string().optional(),
+    }),
+    puc: z.string(),
+    permit: z.string(),
   });
   try {
     vehicleValidator.parse(req.body);
@@ -142,7 +147,6 @@ export const updateVehicle = async (req: Request, res: Response) => {
     vehicleId: z.string(),
     make: z.string().optional(),
     model: z.string().optional(),
-    year: z.number().optional(),
     vin: z.string().optional(),
     registration: z
       .object({
@@ -162,11 +166,15 @@ export const updateVehicle = async (req: Request, res: Response) => {
         availableFuel: z.number().optional(),
       })
       .optional(),
-    insurance: z.object({
-      provider: z.string().optional(),
-      policyNumber: z.string().optional(),
-      expirationDate: z.string().optional(),
+    insuranceExpirationDate: z.string(),
+    registrationDate: z.string(),
+    fitness: z.string(),
+    tax: z.object({
+      taxType: z.string(),
+      lastTaxDate: z.string().optional(),
     }),
+    puc: z.string(),
+    permit: z.string(),
   });
   try {
     vehicleValidator.parse(req.body);
