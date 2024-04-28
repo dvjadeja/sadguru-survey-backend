@@ -26,7 +26,11 @@ const driverSchema = new Schema(
       },
       secondary: String,
     },
-    email: String,
+    adharCard: {
+      type: String,
+      required: true,
+      unique: true,
+    },
     address: {
       street: String,
       city: String,
@@ -42,6 +46,10 @@ const driverSchema = new Schema(
       type: Number,
       required: true,
       default: 0,
+    },
+    onboardingFuel: {
+      type: Number,
+      required: true,
     },
     createdBy: {
       type: Schema.Types.ObjectId,

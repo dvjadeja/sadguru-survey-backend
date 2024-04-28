@@ -7,10 +7,19 @@ import { VEHICLE_STATUS } from '../constants';
 export const listVehicle = async (req: Request, res: Response) => {
   try {
     const { userId } = res.locals.user;
-    const { page, limit = 10 }: any = req.query;
+    const { page, limit = 10, search }: any = req.query;
 
     const vehicles = await Vehicle.find(
-      { createdBy: userId },
+      {
+        createdBy: userId,
+        ...(search && {
+          $or: [
+            { 'registration.plateNumber': new RegExp(search, 'i') },
+            { make: new RegExp(search, 'i') },
+            { model: new RegExp(search, 'i') },
+          ],
+        }),
+      },
       [
         'make',
         'model',
@@ -18,6 +27,7 @@ export const listVehicle = async (req: Request, res: Response) => {
         'fuel.availableFuel',
         'registration.plateNumber',
         'currentStatus',
+        'assignedDriver',
       ],
       {
         sort: {
@@ -26,10 +36,19 @@ export const listVehicle = async (req: Request, res: Response) => {
         skip: parseInt(page) * parseInt(limit),
         limit: parseInt(limit),
       }
-    ).exec();
+    )
+      .populate('assignedDriver', ['firstName', 'lastName'])
+      .exec();
 
     const vehiclesCount = await Vehicle.find({
       createdBy: userId,
+      ...(search && {
+        $or: [
+          { 'registration.plateNumber': new RegExp(search, 'i') },
+          { make: new RegExp(search, 'i') },
+          { model: new RegExp(search, 'i') },
+        ],
+      }),
     }).countDocuments();
 
     handleSuccess(res, {
@@ -223,6 +242,41 @@ export const deleteVehicle = async (req: Request, res: Response) => {
   } catch (error) {
     handleErrors(req, res, {
       message: 'Error while deleting vehicle',
+      error,
+    });
+  }
+};
+
+export const listUnassignedVehicles = async (req: Request, res: Response) => {
+  try {
+    const { userId } = res.locals.user;
+
+    const vehicles = await Vehicle.find(
+      {
+        createdBy: userId,
+        assignedDriver: null,
+        currentStatus: 'ACTIVE',
+      },
+      ['registration.plateNumber'],
+      {
+        sort: { createdAt: -1 },
+      }
+    );
+
+    const newVehicles = vehicles.map((vehicle) => ({
+      label: vehicle?.registration?.plateNumber,
+      value: vehicle._id,
+    }));
+
+    handleSuccess(res, {
+      message: 'Vehicle List Fetched Successfully',
+      data: {
+        data: newVehicles,
+      },
+    });
+  } catch (error) {
+    handleErrors(req, res, {
+      message: 'Error while fetching vehicles',
       error,
     });
   }

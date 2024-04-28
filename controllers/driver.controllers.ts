@@ -1,15 +1,23 @@
 import { Request, Response } from 'express';
-import { Driver } from '../models';
+import { Driver, Vehicle } from '../models';
 import { handleErrors, handleSuccess } from '../utils/response.utils';
 import { z } from 'zod';
 
 export const listDriver = async (req: Request, res: Response) => {
   try {
     const { userId } = res.locals.user;
-    const { page, limit = 10 }: any = req.query;
+    const { page, limit = 10, search }: any = req.query;
 
     const drivers = await Driver.find(
-      { createdBy: userId },
+      {
+        createdBy: userId,
+        ...(search && {
+          $or: [
+            { firstName: new RegExp(search, 'i') },
+            { lastName: new RegExp(search, 'i') },
+          ],
+        }),
+      },
       [
         'firstName',
         'lastName',
@@ -30,6 +38,12 @@ export const listDriver = async (req: Request, res: Response) => {
 
     const driversCount = await Driver.find({
       createdBy: userId,
+      ...(search && {
+        $or: [
+          { firstName: new RegExp(search, 'i') },
+          { lastName: new RegExp(search, 'i') },
+        ],
+      }),
     }).countDocuments();
 
     handleSuccess(res, {
@@ -54,7 +68,7 @@ export const getDriver = async (req: Request, res: Response) => {
 
     const driver = await Driver.findOne({
       $and: [{ _id: id }, { createdBy: userId }],
-    }).populate('assignedVehicle');
+    }).populate('assignedVehicle', ['registration.plateNumber']);
 
     if (!driver) throw new Error(`driver with ${id} not found`);
 
@@ -94,6 +108,8 @@ export const createDriver = async (req: Request, res: Response) => {
       .optional(),
     assignedVehicle: z.string().optional(),
     availableFuel: z.number(),
+    onboardingFuel: z.number(),
+    adharCard: z.string(),
   });
 
   try {
@@ -114,11 +130,41 @@ export const createDriver = async (req: Request, res: Response) => {
         `Driver with ${driverPayload.licenseNumber} already exists`
       );
 
-    const newDriver = new Driver(driverPayload);
+    const vehicle = await Vehicle.findOne({
+      $and: [{ createdBy: userId }, { _id: driverPayload.assignedVehicle }],
+    });
+
+    if (!vehicle)
+      throw new Error(
+        `Vehicle with ${driverPayload.assignedVehicle} not found`
+      );
+
+    if (vehicle.currentStatus !== 'ACTIVE')
+      throw new Error(
+        `Vehicle with ${vehicle.registration?.plateNumber} is not active`
+      );
+
+    if (vehicle.assignedDriver)
+      throw new Error(
+        `Vehicle with ${vehicle.registration?.plateNumber} is already assigned to another driver`
+      );
+
+    const newDriver = new Driver({ ...driverPayload, createdBy: userId });
 
     const registeredDriver = await newDriver.save();
 
     if (registeredDriver) {
+      const vehiclePayload = {
+        assignedDriver: registeredDriver._id,
+      };
+
+      await Vehicle.findOneAndUpdate(
+        {
+          $and: [{ createdBy: userId }, { _id: driverPayload.assignedVehicle }],
+        },
+        vehiclePayload,
+        { new: true }
+      );
       handleSuccess(res, {
         message: 'Driver Created Successfully',
         data: {
@@ -159,6 +205,8 @@ export const updateDriver = async (req: Request, res: Response) => {
       .optional(),
     assignedVehicle: z.string().optional(),
     availableFuel: z.number().optional(),
+    onboardingFuel: z.number().optional(),
+    adharCard: z.string().optional(),
   });
 
   try {

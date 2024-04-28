@@ -53,6 +53,10 @@ const vehicleSchema = new Schema(
       type: Date,
       required: true,
     },
+    assignedDriver: {
+      type: Schema.Types.ObjectId,
+      ref: 'Driver',
+    },
     createdBy: {
       type: Schema.Types.ObjectId,
       ref: 'User',
