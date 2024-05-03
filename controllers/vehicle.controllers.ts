@@ -257,6 +257,43 @@ export const listUnassignedVehicles = async (req: Request, res: Response) => {
         assignedDriver: null,
         currentStatus: 'ACTIVE',
       },
+      ['registration.plateNumber', 'fuel.availableFuel'],
+      {
+        sort: { createdAt: -1 },
+      }
+    );
+
+    const newVehicles = vehicles.map((vehicle) => ({
+      label: vehicle?.registration?.plateNumber,
+      value: vehicle._id,
+      availableFuel: vehicle?.fuel?.availableFuel,
+    }));
+
+    handleSuccess(res, {
+      message: 'Vehicle List Fetched Successfully',
+      data: {
+        data: newVehicles,
+      },
+    });
+  } catch (error) {
+    handleErrors(req, res, {
+      message: 'Error while fetching vehicles',
+      error,
+    });
+  }
+};
+
+// List assigned vehicles
+
+export const listAssignedVehicles = async (req: Request, res: Response) => {
+  try {
+    const { userId } = res.locals.user;
+    const vehicles = await Vehicle.find(
+      {
+        createdBy: userId,
+        assignedDriver: { $ne: null },
+        currentStatus: 'ACTIVE',
+      },
       ['registration.plateNumber'],
       {
         sort: { createdAt: -1 },

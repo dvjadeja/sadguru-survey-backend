@@ -42,6 +42,7 @@ const userSchema = new Schema(
       country: String,
       logo: String,
       stamp: String,
+      prefix: String
     },
   },
   { timestamps: true }

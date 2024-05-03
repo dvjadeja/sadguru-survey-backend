@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { Driver, Vehicle } from '../models';
 import { handleErrors, handleSuccess } from '../utils/response.utils';
 import { z } from 'zod';
+import db from '../setups/mongo';
 
 export const listDriver = async (req: Request, res: Response) => {
   try {
@@ -22,7 +23,7 @@ export const listDriver = async (req: Request, res: Response) => {
         'firstName',
         'lastName',
         'licenseNumber',
-        'phoneNumber.primary',
+        'phoneNumber',
         'assignedVehicle',
       ],
       {
@@ -96,7 +97,6 @@ export const createDriver = async (req: Request, res: Response) => {
       primary: z.string(),
       secondary: z.string().optional(),
     }),
-    email: z.string().optional(),
     address: z
       .object({
         street: z.string(),
@@ -107,10 +107,13 @@ export const createDriver = async (req: Request, res: Response) => {
       })
       .optional(),
     assignedVehicle: z.string().optional(),
-    availableFuel: z.number(),
-    onboardingFuel: z.number(),
     adharCard: z.string(),
+    onboardingFuel: z.number(),
   });
+
+  const session = await db.startSession();
+
+  session.startTransaction();
 
   try {
     driverValidator.parse(req.body);
@@ -149,13 +152,21 @@ export const createDriver = async (req: Request, res: Response) => {
         `Vehicle with ${vehicle.registration?.plateNumber} is already assigned to another driver`
       );
 
-    const newDriver = new Driver({ ...driverPayload, createdBy: userId });
+    const newDriver = new Driver({
+      ...driverPayload,
+      onboardingFuel: driverPayload?.onboardingFuel,
+      createdBy: userId,
+    });
 
-    const registeredDriver = await newDriver.save();
+    const registeredDriver = await newDriver.save({ session: session });
 
     if (registeredDriver) {
       const vehiclePayload = {
         assignedDriver: registeredDriver._id,
+        fuel: {
+          fuelCapacity: vehicle?.fuel?.fuelCapacity,
+          availableFuel: 0,
+        },
       };
 
       await Vehicle.findOneAndUpdate(
@@ -163,8 +174,13 @@ export const createDriver = async (req: Request, res: Response) => {
           $and: [{ createdBy: userId }, { _id: driverPayload.assignedVehicle }],
         },
         vehiclePayload,
-        { new: true }
+        { new: true, session: session }
       );
+
+      // If all updates succeed, commit the transaction
+      await session.commitTransaction();
+      session.endSession();
+
       handleSuccess(res, {
         message: 'Driver Created Successfully',
         data: {
@@ -173,6 +189,8 @@ export const createDriver = async (req: Request, res: Response) => {
       });
     }
   } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
     handleErrors(req, res, {
       message: 'Error while creating driver',
       error,

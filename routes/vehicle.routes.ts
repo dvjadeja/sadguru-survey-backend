@@ -4,6 +4,7 @@ import {
   createVehicle,
   deleteVehicle,
   getVehicle,
+  listAssignedVehicles,
   listUnassignedVehicles,
   listVehicle,
   updateVehicle,
@@ -17,5 +18,6 @@ router.post('/create', isAuthenticated, createVehicle);
 router.put('/update', isAuthenticated, updateVehicle);
 router.delete('/delete', isAuthenticated, deleteVehicle);
 router.get('/unassigned', isAuthenticated, listUnassignedVehicles);
+router.get('/assigned', isAuthenticated, listAssignedVehicles);
 
 export default router;
