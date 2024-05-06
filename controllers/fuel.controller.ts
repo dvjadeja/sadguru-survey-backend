@@ -270,11 +270,21 @@ export const getFuel = async (req: Request, res: Response) => {
 
     if (!fuel) throw new Error(`Fuel not found`);
 
-    if (fuel && fuel.totalAmount) fuel.totalAmount = fuel.totalAmount;
+    const data = {
+      ...fuel.toObject(),
+      totalAmount: fuel.totalAmount?.toString(),
+      expenses: fuel.expenses?.map((expense) => ({
+        _id: expense._id,
+        description: expense.description,
+        quantity: expense.quantity.toString(),
+        rate: expense.rate.toString(),
+        amount: expense.amount.toString(),
+      })),
+    };
 
     handleSuccess(res, {
       message: 'Fuel Fetched Successfully',
-      data: fuel,
+      data: data,
     });
   } catch (error) {
     handleErrors(req, res, {
