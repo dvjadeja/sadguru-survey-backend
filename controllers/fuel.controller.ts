@@ -266,7 +266,9 @@ export const getFuel = async (req: Request, res: Response) => {
 
     const fuel = await Fuel.findOne({
       $and: [{ _id: id }, { createdBy: userId }],
-    }).populate('vehicleId', ['registration.plateNumber']);
+    })
+      .populate('vehicleId', ['registration.plateNumber'])
+      .populate('driverId', ['firstName', 'lastName']);
 
     if (!fuel) throw new Error(`Fuel not found`);
 
