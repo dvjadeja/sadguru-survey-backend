@@ -26,9 +26,18 @@ const vendorSchema = new Schema(
       type: String,
       required: true,
     },
-    totalAmount: String,
-    pendingAmount: String,
-    paidAmount: String,
+    totalAmount: {
+      type: String,
+      required: true,
+    },
+    pendingAmount: {
+      type: String,
+      required: true,
+    },
+    paidAmount: {
+      type: String,
+      required: true,
+    },
     createdBy: {
       type: Schema.Types.ObjectId,
       ref: 'User',

@@ -318,3 +318,37 @@ export const listAssignedVehicles = async (req: Request, res: Response) => {
     });
   }
 };
+
+// List all vehicle of user
+
+export const listAllVehicles = async (req: Request, res: Response) => {
+  try {
+    const { userId } = res.locals.user;
+    const vehicles = await Vehicle.find(
+      {
+        createdBy: userId,
+      },
+      ['registration.plateNumber'],
+      {
+        sort: { createdAt: -1 },
+      }
+    );
+
+    const newVehicles = vehicles.map((vehicle) => ({
+      label: vehicle?.registration?.plateNumber,
+      value: vehicle._id,
+    }));
+
+    handleSuccess(res, {
+      message: 'Vehicle List Fetched Successfully',
+      data: {
+        data: newVehicles,
+      },
+    });
+  } catch (error) {
+    handleErrors(req, res, {
+      message: 'Error while fetching vehicles',
+      error,
+    });
+  }
+};

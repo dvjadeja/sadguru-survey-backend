@@ -4,6 +4,7 @@ import {
   createVehicle,
   deleteVehicle,
   getVehicle,
+  listAllVehicles,
   listAssignedVehicles,
   listUnassignedVehicles,
   listVehicle,
@@ -13,6 +14,7 @@ import {
 const router = Router();
 
 router.get('/list', isAuthenticated, listVehicle);
+router.get('/list-all', isAuthenticated, listAllVehicles);
 router.get('/', isAuthenticated, getVehicle);
 router.post('/create', isAuthenticated, createVehicle);
 router.put('/update', isAuthenticated, updateVehicle);

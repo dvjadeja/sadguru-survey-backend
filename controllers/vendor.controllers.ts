@@ -188,3 +188,28 @@ export const updateVendor = async (req: Request, res: Response) => {
     });
   }
 };
+
+// List all vendor of user
+export const listAllVendors = async (req: Request, res: Response) => {
+  try {
+    const { userId } = res.locals.user;
+    const vendors = await Vendor.find({ createdBy: userId }, ['name'], {
+      sort: { createdAt: -1 },
+    });
+
+    const newVendors = vendors.map((vendor) => ({
+      label: vendor.name,
+      value: vendor._id,
+    }));
+
+    handleSuccess(res, {
+      message: 'Vendors Fetched Successfully',
+      data: newVendors,
+    });
+  } catch (error) {
+    handleErrors(req, res, {
+      message: 'Error while fetching vendors',
+      error,
+    });
+  }
+};
