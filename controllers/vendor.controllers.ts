@@ -94,8 +94,8 @@ export const createVendor = async (req: Request, res: Response) => {
         country: z.string().optional(),
       })
       .optional(),
-    gst: z.string(),
-    pan: z.string(),
+    gst: z.string().optional(),
+    pan: z.string().optional(),
     totalAmount: z.string(),
     pendingAmount: z.string(),
     paidAmount: z.string(),
@@ -105,14 +105,9 @@ export const createVendor = async (req: Request, res: Response) => {
     const { userId } = res.locals.user;
     const vendorPayload = req.body;
 
-    // find vendor with same gst or pan or phone or name
+    // find vendor with same gst or pan
     const vendor = await Vendor.findOne({
-      $or: [
-        { gst: vendorPayload.gst },
-        { pan: vendorPayload.pan },
-        { phone: vendorPayload.phone },
-        { name: vendorPayload.name },
-      ],
+      $or: [{ gst: vendorPayload.gst }, { pan: vendorPayload.pan }],
     });
     if (vendor) {
       throw new Error('Vendor already exists');

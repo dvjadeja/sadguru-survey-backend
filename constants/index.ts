@@ -13,3 +13,11 @@ export const VEHICLE_TAX_TYPE = {
   LTT: 'LTT',
   OTT: 'OTT',
 };
+
+export const PAYMENT_TYPE = {
+  CASH: 'CASH',
+  RTGS: 'RTGS',
+  NEFT: 'NEFT',
+  CHEQUE: 'CHEQUE',
+  UPI: 'UPI',
+};

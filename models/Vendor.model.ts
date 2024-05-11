@@ -20,11 +20,11 @@ const vendorSchema = new Schema(
     },
     gst: {
       type: String,
-      required: true,
+      unique: true,
     },
     pan: {
       type: String,
-      required: true,
+      unique: true,
     },
     totalAmount: {
       type: String,
