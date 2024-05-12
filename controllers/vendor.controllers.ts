@@ -106,12 +106,23 @@ export const createVendor = async (req: Request, res: Response) => {
     const vendorPayload = req.body;
 
     // find vendor with same gst or pan
-    const vendor = await Vendor.findOne({
-      $or: [{ gst: vendorPayload.gst }, { pan: vendorPayload.pan }],
-    });
-    if (vendor) {
-      throw new Error('Vendor already exists');
-    }
+    // if (vendorPayload.gst) {
+    //   const vendor = await Vendor.findOne({
+    //     $or: [{ gst: vendorPayload.gst }],
+    //   });
+    //   if (vendor) {
+    //     throw new Error('Vendor already exists with same gst');
+    //   }
+    // }
+
+    // if (vendorPayload.pan) {
+    //   const vendor = await Vendor.findOne({
+    //     $or: [{ pan: vendorPayload.pan }],
+    //   });
+    //   if (vendor) {
+    //     throw new Error('Vendor already exists with same pan');
+    //   }
+    // }
 
     const newVendor = new Vendor({
       ...vendorPayload,

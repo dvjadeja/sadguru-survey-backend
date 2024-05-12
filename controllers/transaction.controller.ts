@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { Transaction, Vendor } from '../models';
+import { Maintenance, Transaction, Vendor } from '../models';
 import { handleErrors, handleSuccess } from '../utils/response.utils';
 import { z } from 'zod';
 import db from '../setups/mongo';
@@ -163,6 +163,73 @@ export const createTransaction = async (req: Request, res: Response) => {
     session.endSession();
     handleErrors(req, res, {
       message: 'Error while creating transaction',
+      error,
+    });
+  }
+};
+
+export const printTransactions = async (req: Request, res: Response) => {
+  try {
+    const { userId } = res.locals.user;
+    const { startDate, endDate, vendorIds, vehicleIds }: any = req.query;
+
+    // console.log('vendorIds :: ', vendorIds);
+    // console.log('vendorIds JSON:: ', JSON.parse(vendorIds));
+
+    const maintenanceCondition: any = {
+      createdBy: userId,
+    };
+
+    if (startDate && endDate) {
+      maintenanceCondition.billDate = { $gte: startDate, $lte: endDate };
+    }
+
+    if (vendorIds) {
+      const venderId = vendorIds.split(',');
+      console.log('venderId :: ', venderId);
+      maintenanceCondition.vendorId = { $in: venderId };
+    }
+
+    if (vehicleIds) {
+      const vehicleId = vehicleIds.split(',');
+      console.log('vehicleId :: ', vehicleId);
+      maintenanceCondition.vehicleId = { $in: vehicleId };
+    }
+
+    const maintenance = await Maintenance.find(maintenanceCondition, [
+      'billNumber',
+      'billDate',
+      'billAmount',
+    ])
+      .sort({ billDate: 1 })
+      .populate('vendorId', ['name'])
+      .populate('vehicleId', ['registration.plateNumber']);
+
+    if (!maintenance) throw new Error('Maintenance not found');
+
+    const transactionCondition: any = {
+      createdBy: userId,
+    }
+
+    if (startDate && endDate) {
+      transactionCondition.paymentDate = { $gte: startDate, $lte: endDate };
+    }
+
+    if (vendorIds) {
+      const venderId = vendorIds.split(',');
+      console.log('venderId :: ', venderId);
+      transactionCondition.vendorId = { $in: venderId };
+    }
+    
+    handleSuccess(res, {
+      message: 'Maintenance Fetched Successfully',
+      data: {
+        maintenance: maintenance,
+      },
+    });
+  } catch (error) {
+    handleErrors(req, res, {
+      message: 'Error while fetching maintenance',
       error,
     });
   }

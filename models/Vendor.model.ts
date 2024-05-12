@@ -18,14 +18,8 @@ const vendorSchema = new Schema(
       zipCode: String,
       country: String,
     },
-    gst: {
-      type: String,
-      unique: true,
-    },
-    pan: {
-      type: String,
-      unique: true,
-    },
+    gst: String,
+    pan: String,
     totalAmount: {
       type: String,
       required: true,
