@@ -131,8 +131,8 @@ export const createTransaction = async (req: Request, res: Response) => {
         );
       }
 
-      vendor.totalAmount = (
-        Number(vendor.totalAmount) - Number(transactionPayload.amount)
+      vendor.paidAmount = (
+        Number(vendor.paidAmount) + Number(transactionPayload.amount)
       ).toString();
 
       // check if the vendor pendingAmount is greater than the transaction amount
@@ -209,7 +209,7 @@ export const printTransactions = async (req: Request, res: Response) => {
 
     const transactionCondition: any = {
       createdBy: userId,
-    }
+    };
 
     if (startDate && endDate) {
       transactionCondition.paymentDate = { $gte: startDate, $lte: endDate };
@@ -220,7 +220,7 @@ export const printTransactions = async (req: Request, res: Response) => {
       console.log('venderId :: ', venderId);
       transactionCondition.vendorId = { $in: venderId };
     }
-    
+
     handleSuccess(res, {
       message: 'Maintenance Fetched Successfully',
       data: {
