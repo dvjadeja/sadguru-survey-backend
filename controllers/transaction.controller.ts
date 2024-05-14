@@ -171,41 +171,7 @@ export const createTransaction = async (req: Request, res: Response) => {
 export const printTransactions = async (req: Request, res: Response) => {
   try {
     const { userId } = res.locals.user;
-    const { startDate, endDate, vendorIds, vehicleIds }: any = req.query;
-
-    // console.log('vendorIds :: ', vendorIds);
-    // console.log('vendorIds JSON:: ', JSON.parse(vendorIds));
-
-    const maintenanceCondition: any = {
-      createdBy: userId,
-    };
-
-    if (startDate && endDate) {
-      maintenanceCondition.billDate = { $gte: startDate, $lte: endDate };
-    }
-
-    if (vendorIds) {
-      const venderId = vendorIds.split(',');
-      console.log('venderId :: ', venderId);
-      maintenanceCondition.vendorId = { $in: venderId };
-    }
-
-    if (vehicleIds) {
-      const vehicleId = vehicleIds.split(',');
-      console.log('vehicleId :: ', vehicleId);
-      maintenanceCondition.vehicleId = { $in: vehicleId };
-    }
-
-    const maintenance = await Maintenance.find(maintenanceCondition, [
-      'billNumber',
-      'billDate',
-      'billAmount',
-    ])
-      .sort({ billDate: 1 })
-      .populate('vendorId', ['name'])
-      .populate('vehicleId', ['registration.plateNumber']);
-
-    if (!maintenance) throw new Error('Maintenance not found');
+    const { startDate, endDate, vendorIds }: any = req.query;
 
     const transactionCondition: any = {
       createdBy: userId,
@@ -221,15 +187,33 @@ export const printTransactions = async (req: Request, res: Response) => {
       transactionCondition.vendorId = { $in: venderId };
     }
 
+    const transaction = await Transaction.find(transactionCondition, [
+      'amount',
+      'paymentDate',
+      'paymentMethod',
+    ])
+      .sort({ paymentDate: 1 })
+      .populate('vendorId', ['name']);
+
+    if (!transaction) throw new Error('Transaction not found');
+
+    const totalAmount = transaction.reduce(
+      (acc: number, item: any) => acc + Number(item.amount),
+      0
+    );
+
+    console.log('totalAmount :: ', totalAmount);
+
     handleSuccess(res, {
-      message: 'Maintenance Fetched Successfully',
+      message: 'Transaction Fetched Successfully',
       data: {
-        maintenance: maintenance,
+        transaction,
+        totalAmount,
       },
     });
   } catch (error) {
     handleErrors(req, res, {
-      message: 'Error while fetching maintenance',
+      message: 'Error while fetching Transaction',
       error,
     });
   }
