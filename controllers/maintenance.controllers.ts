@@ -121,15 +121,19 @@ export const createMaintenance = async (req: Request, res: Response) => {
       if (!vendor)
         throw new Error(`Vendor with ${maintenancePayload.vendorId} not found`);
 
-      vendor.totalAmount = (
-        parseFloat(vendor.totalAmount) +
-        parseFloat(maintenancePayload.billAmount)
-      ).toString();
+      if (!isNaN(parseFloat(maintenancePayload.billAmount))) {
+        vendor.totalAmount = (
+          parseFloat(vendor.totalAmount) +
+          parseFloat(maintenancePayload.billAmount)
+        ).toString();
 
-      vendor.pendingAmount = (
-        parseFloat(vendor.pendingAmount) +
-        parseFloat(maintenancePayload.billAmount)
-      ).toString();
+        vendor.pendingAmount = (
+          parseFloat(vendor.pendingAmount) +
+          parseFloat(maintenancePayload.billAmount)
+        ).toString();
+      } else {
+        throw new Error('Invalid bill amount');
+      }
 
       await vendor.save({ session: session });
 
@@ -146,6 +150,107 @@ export const createMaintenance = async (req: Request, res: Response) => {
     session.endSession();
     handleErrors(req, res, {
       message: 'Error while creating maintenance',
+      error,
+    });
+  }
+};
+
+export const updateMaintenance = async (req: Request, res: Response) => {
+  const maintenanceValidator = z.object({
+    maintenanceId: z.string(),
+    billNumber: z.string().optional(),
+    billDate: z.string().optional(),
+    billAmount: z.string().optional(),
+    previousBillAmount: z.string().optional(),
+    vendorId: z.string(),
+    vehicleId: z.string().optional(),
+  });
+
+  const session = await db.startSession();
+
+  session.startTransaction();
+
+  try {
+    maintenanceValidator.parse(req.body);
+
+    const { userId } = res.locals.user;
+
+    const maintenancePayload = req.body;
+
+    const maintenance = await Maintenance.findOne({
+      $and: [{ createdBy: userId }, { _id: maintenancePayload.maintenanceId }],
+    });
+
+    if (!maintenance)
+      throw new Error(
+        `Maintenance with ${maintenancePayload.billNumber} not found`
+      );
+
+    if (
+      maintenancePayload.billAmount !== maintenancePayload.previousBillAmount
+    ) {
+      // Decrement the Vendor pending amount and totalAmount from the Vendor Model
+      const vendor = await Vendor.findOne({
+        _id: maintenancePayload.vendorId,
+        createdBy: userId,
+      });
+
+      if (!vendor)
+        throw new Error(`Vendor with ${maintenancePayload.vendorId} not found`);
+
+      if (!isNaN(parseFloat(maintenancePayload.previousBillAmount))) {
+        vendor.totalAmount = (
+          parseFloat(vendor.totalAmount) -
+          parseFloat(maintenancePayload.previousBillAmount)
+        ).toString();
+
+        vendor.pendingAmount = (
+          parseFloat(vendor.pendingAmount) -
+          parseFloat(maintenancePayload.previousBillAmount)
+        ).toString();
+
+        await vendor.save({ session: session });
+
+        // Increment the Vendor pending amount and totalAmount from the Vendor Model
+        if (!isNaN(parseFloat(maintenancePayload.billAmount))) {
+          vendor.totalAmount = (
+            parseFloat(vendor.totalAmount) +
+            parseFloat(maintenancePayload.billAmount)
+          ).toString();
+
+          vendor.pendingAmount = (
+            parseFloat(vendor.pendingAmount) +
+            parseFloat(maintenancePayload.billAmount)
+          ).toString();
+
+          await vendor.save({ session: session });
+        } else {
+          throw new Error('Invalid bill amount');
+        }
+      } else {
+        throw new Error('Invalid bill amount');
+      }
+    }
+
+    const updatedMaintenance = await Maintenance.findOneAndUpdate(
+      { _id: maintenancePayload.maintenanceId },
+      maintenancePayload,
+      { new: true, session: session }
+    );
+
+    if (updatedMaintenance) {
+      // If all updates succeed, commit the transaction
+      await session.commitTransaction();
+      session.endSession();
+      handleSuccess(res, {
+        message: 'Maintenance Updated Successfully',
+      });
+    }
+  } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+    handleErrors(req, res, {
+      message: 'Error while updating maintenance',
       error,
     });
   }

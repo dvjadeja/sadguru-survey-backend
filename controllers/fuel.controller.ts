@@ -163,9 +163,9 @@ export const createFuel = async (req: Request, res: Response) => {
     expenses: z.array(
       z.object({
         description: z.string(),
-        quantity: z.string(),
-        rate: z.string(),
-        amount: z.string(),
+        quantity: z.string().or(z.number()),
+        rate: z.string().or(z.number()),
+        amount: z.string().or(z.number()),
       })
     ),
     totalAmount: z.string(),

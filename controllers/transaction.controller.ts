@@ -71,7 +71,7 @@ export const createTransaction = async (req: Request, res: Response) => {
   const transactionValidator = z
     .object({
       vendorId: z.string(),
-      amount: z.string(),
+      amount: z.string().or(z.number()),
       paymentDate: z.string(),
       paymentMethod: z.object({
         paymentType: z.enum([
