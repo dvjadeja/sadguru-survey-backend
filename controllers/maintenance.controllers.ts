@@ -271,8 +271,8 @@ export const printMaintenances = async (req: Request, res: Response) => {
 
     if (startDate && endDate) {
       maintenanceCondition.billDate = {
-        $gte: '2024-05-09T18:30:00.000Z',
-        $lte: '2024-05-15T18:30:00.000Z',
+        $gte: startDate,
+        $lte: endDate,
       };
     }
 
