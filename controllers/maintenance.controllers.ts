@@ -255,3 +255,64 @@ export const updateMaintenance = async (req: Request, res: Response) => {
     });
   }
 };
+
+// API to list the data from maintenance from startDate, endDate, optional parameters:- vendorIds, vehicleIds
+
+export const printMaintenances = async (req: Request, res: Response) => {
+  try {
+    const { userId } = res.locals.user;
+    const { startDate, endDate, vendorIds, vehicleIds }: any = req.query;
+
+    console.log(req.query);
+
+    const maintenanceCondition: any = {
+      createdBy: userId,
+    };
+
+    if (startDate && endDate) {
+      maintenanceCondition.billDate = {
+        $gte: '2024-05-09T18:30:00.000Z',
+        $lte: '2024-05-15T18:30:00.000Z',
+      };
+    }
+
+    if (vendorIds) {
+      const vendorId = vendorIds.split(',');
+      maintenanceCondition.vendorId = { $in: vendorId };
+    }
+
+    if (vehicleIds) {
+      const vehicleId = vehicleIds.split(',');
+      maintenanceCondition.vehicleId = { $in: vehicleId };
+    }
+
+    const maintenances = await Maintenance.find(maintenanceCondition, [
+      'billNumber',
+      'billDate',
+      'billAmount',
+    ])
+      .populate('vehicleId', ['registration.plateNumber'])
+      .populate('vendorId', ['name']);
+
+    if (!maintenances) throw new Error('Maintenances not found');
+
+    // calculate total amount from maintenance.billAmount
+    const totalAmount = maintenances.reduce(
+      (acc: number, item: any) => acc + Number(item.billAmount),
+      0
+    );
+
+    handleSuccess(res, {
+      message: 'Maintenances Fetched Successfully',
+      data: {
+        maintenances,
+        totalAmount,
+      },
+    });
+  } catch (error) {
+    handleErrors(req, res, {
+      message: 'Error while fetching maintenances',
+      error,
+    });
+  }
+};
