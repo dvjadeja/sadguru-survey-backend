@@ -11,6 +11,9 @@ export const listDailyLogs = async (req: Request, res: Response) => {
 
     const dailyLogs: any = await DailyLog.aggregate([
       {
+        $sort: { createdAt: -1 },
+      },
+      {
         $lookup: {
           from: 'vehicles',
           localField: 'vehicleId',
