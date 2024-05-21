@@ -7,6 +7,7 @@ import fuelRoutes from './fuel.routes';
 import vendorRoutes from './vendor.routes';
 import maintenanceRoutes from './maintenance.routes';
 import transactionRoutes from './transaction.routes';
+import dailyLogsRoutes from './daily-log.routes';
 
 export const registerRoutes = (app: Express) => {
   app.use('/api/v1/auth', authRoutes);
@@ -16,4 +17,5 @@ export const registerRoutes = (app: Express) => {
   app.use('/api/v1/vendor', vendorRoutes);
   app.use('/api/v1/maintenance', maintenanceRoutes);
   app.use('/api/v1/transaction', transactionRoutes);
+  app.use('/api/v1/daily-log', dailyLogsRoutes);
 };

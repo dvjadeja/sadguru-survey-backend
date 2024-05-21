@@ -183,7 +183,6 @@ export const printTransactions = async (req: Request, res: Response) => {
 
     if (vendorIds) {
       const venderId = vendorIds.split(',');
-      console.log('venderId :: ', venderId);
       transactionCondition.vendorId = { $in: venderId };
     }
 
@@ -201,8 +200,6 @@ export const printTransactions = async (req: Request, res: Response) => {
       (acc: number, item: any) => acc + Number(item.amount),
       0
     );
-
-    console.log('totalAmount :: ', totalAmount);
 
     handleSuccess(res, {
       message: 'Transaction Fetched Successfully',

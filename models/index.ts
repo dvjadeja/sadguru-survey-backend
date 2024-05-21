@@ -5,3 +5,4 @@ export { default as Fuel } from './Fuel.model';
 export { default as Vendor } from './Vendor.model';
 export { default as Maintenance } from './Maintenance.model';
 export { default as Transaction } from './Transaction.model';
+export { default as DailyLog } from './DailyLog.model';
