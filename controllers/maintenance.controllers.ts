@@ -263,8 +263,6 @@ export const printMaintenances = async (req: Request, res: Response) => {
     const { userId } = res.locals.user;
     const { startDate, endDate, vendorIds, vehicleIds }: any = req.query;
 
-    console.log(req.query);
-
     const maintenanceCondition: any = {
       createdBy: userId,
     };

@@ -7,3 +7,5 @@ export { default as Maintenance } from './Maintenance.model';
 export { default as Transaction } from './Transaction.model';
 export { default as DailyLog } from './DailyLog.model';
 export { default as FeatureFlag } from './FeatureFlag.model';
+export { default as LorryReceipt } from './LorryReceipt.model';
+export { default as Ledger } from './Ledger.model';

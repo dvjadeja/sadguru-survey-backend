@@ -9,6 +9,7 @@ import maintenanceRoutes from './maintenance.routes';
 import transactionRoutes from './transaction.routes';
 import dailyLogsRoutes from './daily-log.routes';
 import featureFlagsRoutes from './feature-flag.routes';
+import ledgerRoutes from './ledger.routes';
 
 export const registerRoutes = (app: Express) => {
   app.use('/api/v1/auth', authRoutes);
@@ -20,4 +21,5 @@ export const registerRoutes = (app: Express) => {
   app.use('/api/v1/transaction', transactionRoutes);
   app.use('/api/v1/daily-log', dailyLogsRoutes);
   app.use('/api/v1/feature-flag', featureFlagsRoutes);
+  app.use('/api/v1/ledger', ledgerRoutes);
 };
