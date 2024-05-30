@@ -78,13 +78,13 @@ export const listLedger = async (req: Request, res: Response) => {
 };
 export const createLedger = async (req: Request, res: Response) => {
   const ledgerValidator = z.object({
-    gstin: z.string(),
+    gstin: z.string().optional(),
     totalAmount: z.number().min(0),
     paidAmount: z.number().min(0),
     pendingAmount: z.number().min(0),
     tradeName: z.string(),
     legalName: z.string(),
-    gstStatus: z.enum(['ACTIVE', 'INACTIVE', 'PENDING']),
+    gstStatus: z.enum(['ACTIVE', 'INACTIVE', 'PENDING']).optional(),
     pan: z.string().optional(),
     address: z
       .object({

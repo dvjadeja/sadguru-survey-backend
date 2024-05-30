@@ -28,7 +28,6 @@ const ledgerSchema = new Schema(
     },
     gstStatus: {
       type: String,
-      required: true,
       enum: ['ACTIVE', 'INACTIVE', 'PENDING'],
     },
     pan: String,
