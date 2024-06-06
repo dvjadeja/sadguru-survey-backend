@@ -13,10 +13,10 @@ const lorryReceiptSchema = new Schema(
     vehicleId: {
       type: Schema.Types.ObjectId,
       ref: 'Vehicle',
-      required: true,
     },
     modeOfTrade: {
       type: String,
+      enum: ['IMPORT', 'EXPORT'],
       required: true,
     },
     bookingNo: String,
@@ -68,6 +68,12 @@ const lorryReceiptSchema = new Schema(
       zipCode: String,
       state: String,
       country: String,
+    },
+    invoiceStatus: {
+      type: String,
+      enum: ['PENDING', 'GENERATED'],
+      default: 'PENDING',
+      required: true,
     },
     createdBy: {
       type: Schema.Types.ObjectId,

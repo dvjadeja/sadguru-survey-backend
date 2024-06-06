@@ -234,3 +234,30 @@ export const getLedger = async (req: Request, res: Response) => {
     });
   }
 };
+
+export const listAllLedgers = async (req: Request, res: Response) => {
+  try {
+    const { userId } = res.locals.user;
+
+    const ledgers = await Ledger.find({ createdBy: userId }, ['legalName'], {
+      sort: { createdAt: -1 },
+    });
+
+    if (!ledgers) throw new Error('Ledgers not found');
+
+    const newLedgers = ledgers.map((ledger) => ({
+      label: ledger?.legalName,
+      value: ledger._id,
+    }));
+
+    handleSuccess(res, {
+      message: 'Ledgers fetched successfully',
+      data: newLedgers,
+    });
+  } catch (error) {
+    handleErrors(req, res, {
+      message: 'Error while fetching ledgers',
+      error,
+    });
+  }
+};
