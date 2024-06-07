@@ -178,6 +178,8 @@ export const listLorryReceipt = async (req: Request, res: Response) => {
         'rate',
         'detentionAmount',
         'invoiceStatus',
+        'ownVehicle',
+        'marketTruckDetails.vehiclePlateNumber',
       ],
       {
         sort: {
@@ -211,6 +213,31 @@ export const listLorryReceipt = async (req: Request, res: Response) => {
         data: newLorryReceipt,
         count: LRCount,
       },
+    });
+  } catch (error) {
+    handleErrors(req, res, {
+      message: 'Error while fetching lorry receipt',
+      error,
+    });
+  }
+};
+
+export const getLorryReceipt = async (req: Request, res: Response) => {
+  try {
+    const { userId } = res.locals.user;
+    const { id }: any = req.query;
+
+    const lorryReceipt = await LorryReceipt.findOne({
+      $and: [{ _id: id }, { createdBy: userId }],
+    })
+      .populate('billingParty')
+      .populate('vehicleId');
+
+    if (!lorryReceipt) throw new Error(`Lorry receipt with ${id} not found`);
+
+    handleSuccess(res, {
+      message: 'Lorry receipt fetched successfully',
+      data: lorryReceipt,
     });
   } catch (error) {
     handleErrors(req, res, {
