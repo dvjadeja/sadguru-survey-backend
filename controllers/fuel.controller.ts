@@ -9,142 +9,174 @@ export const listFuel = async (req: Request, res: Response) => {
     const { userId } = res.locals.user;
     const { page, limit = 10, search }: any = req.query;
 
-    const fuel = await Fuel.aggregate([
-      {
-        $match: {
-          createdBy: new db.Types.ObjectId(userId),
-        },
-      },
-      {
-        $lookup: {
-          from: 'drivers',
-          let: { driverId: '$driverId' },
-          pipeline: [
-            {
-              $match: {
-                $expr: { $eq: ['$_id', '$$driverId'] },
-              },
-            },
-            {
-              $project: {
-                _id: 1, // Include driver ID
-                firstName: 1, // Include firstName
-                lastName: 1, // Include lastName
-              },
-            },
-          ],
-          as: 'driver',
-        },
-      },
-      {
-        $unwind: '$driver', // Convert driver array to object
-      },
-      {
-        $lookup: {
-          from: 'vehicles',
-          let: { vehicleId: '$vehicleId' },
-          pipeline: [
-            {
-              $match: {
-                $expr: { $eq: ['$_id', '$$vehicleId'] },
-              },
-            },
-            {
-              $project: {
-                _id: 1, // Include driver ID
-                registration: {
-                  plateNumber: 1, // Include plateNumber
-                }, // Include firstName
-              },
-            },
-          ],
-          as: 'vehicle',
-        },
-      },
-      {
-        $unwind: '$vehicle', // Convert driver array to object
-      },
-      {
-        $match: search
-          ? {
-              $or: [
-                { receiptId: { $regex: new RegExp(search, 'i') } }, // Case-insensitive search for receiptId
-                { 'driver.firstName': { $regex: new RegExp(search, 'i') } }, // Case-insensitive search for driver's firstName
-                { 'driver.lastName': { $regex: new RegExp(search, 'i') } }, // Case-insensitive search for driver's lastName
-                {
-                  'vehicle.registration.plateNumber': {
-                    $regex: new RegExp(search, 'i'),
-                  },
-                }, // Case-insensitive search for vehicle's plateNumber
-              ],
-            }
-          : {},
-      },
-      {
-        $addFields: {
-          totalAmount: {
-            $toDouble: '$totalAmount',
-          },
-        },
-      },
-      {
-        $unset: 'expenses', // Remove the expenses array from the document
-      },
-      {
-        $group: {
-          _id: null,
-          count: { $sum: 1 }, // Count documents
-          results: { $push: '$$ROOT' }, // Push documents to results array
-        },
-      },
-      {
-        $project: {
-          _id: 0, // Exclude _id field
-          count: 1, // Include count field
-          results: {
-            $slice: [
-              '$results',
-              parseInt(page) * parseInt(limit),
-              parseInt(limit),
-            ],
-          }, // Apply pagination to results array
-        },
-      },
-      {
-        $unwind: '$results', // Unwind the results array before sorting
-      },
-      {
-        $sort: { 'results.createdAt': -1 }, // Sort by createdAt date in descending order
-      },
-      {
-        $group: {
-          _id: null,
-          count: { $first: '$count' }, // Preserve the count field
-          results: { $push: '$results' }, // Push sorted results to the array
-        },
-      },
-      {
-        $project: {
-          _id: 0,
-          count: 1,
-          results: {
-            $slice: [
-              '$results',
-              parseInt(page) * parseInt(limit),
-              parseInt(limit),
-            ],
-          }, // Apply pagination to sorted results array
-        },
-      },
-    ]);
+    // const fuel = await Fuel.aggregate([
+    //   {
+    //     $match: {
+    //       createdBy: new db.Types.ObjectId(userId),
+    //     },
+    //   },
+    //   {
+    //     $lookup: {
+    //       from: 'drivers',
+    //       let: { driverId: '$driverId' },
+    //       pipeline: [
+    //         {
+    //           $match: {
+    //             $expr: { $eq: ['$_id', '$$driverId'] },
+    //           },
+    //         },
+    //         {
+    //           $project: {
+    //             _id: 1, // Include driver ID
+    //             firstName: 1, // Include firstName
+    //             lastName: 1, // Include lastName
+    //           },
+    //         },
+    //       ],
+    //       as: 'driver',
+    //     },
+    //   },
+    //   {
+    //     $unwind: '$driver', // Convert driver array to object
+    //   },
+    //   {
+    //     $lookup: {
+    //       from: 'vehicles',
+    //       let: { vehicleId: '$vehicleId' },
+    //       pipeline: [
+    //         {
+    //           $match: {
+    //             $expr: { $eq: ['$_id', '$$vehicleId'] },
+    //           },
+    //         },
+    //         {
+    //           $project: {
+    //             _id: 1, // Include driver ID
+    //             registration: {
+    //               plateNumber: 1, // Include plateNumber
+    //             }, // Include firstName
+    //           },
+    //         },
+    //       ],
+    //       as: 'vehicle',
+    //     },
+    //   },
+    //   {
+    //     $unwind: '$vehicle', // Convert driver array to object
+    //   },
+    //   {
+    //     $match: search
+    //       ? {
+    //           $or: [
+    //             { receiptId: { $regex: new RegExp(search, 'i') } }, // Case-insensitive search for receiptId
+    //             { 'driver.firstName': { $regex: new RegExp(search, 'i') } }, // Case-insensitive search for driver's firstName
+    //             { 'driver.lastName': { $regex: new RegExp(search, 'i') } }, // Case-insensitive search for driver's lastName
+    //             {
+    //               'vehicle.registration.plateNumber': {
+    //                 $regex: new RegExp(search, 'i'),
+    //               },
+    //             }, // Case-insensitive search for vehicle's plateNumber
+    //           ],
+    //         }
+    //       : {},
+    //   },
+    //   {
+    //     $addFields: {
+    //       totalAmount: {
+    //         $toDouble: '$totalAmount',
+    //       },
+    //     },
+    //   },
+    //   {
+    //     $unset: 'expenses', // Remove the expenses array from the document
+    //   },
+    //   {
+    //     $group: {
+    //       _id: null,
+    //       count: { $sum: 1 }, // Count documents
+    //       results: { $push: '$$ROOT' }, // Push documents to results array
+    //     },
+    //   },
+    //   {
+    //     $project: {
+    //       _id: 0, // Exclude _id field
+    //       count: 1, // Include count field
+    //       results: {
+    //         $slice: [
+    //           '$results',
+    //           parseInt(page) * parseInt(limit),
+    //           parseInt(limit),
+    //         ],
+    //       }, // Apply pagination to results array
+    //     },
+    //   },
+    //   {
+    //     $unwind: '$results', // Unwind the results array before sorting
+    //   },
+    //   {
+    //     $sort: { 'results.createdAt': -1 }, // Sort by createdAt date in descending order
+    //   },
+    //   {
+    //     $group: {
+    //       _id: null,
+    //       count: { $first: '$count' }, // Preserve the count field
+    //       results: { $push: '$results' }, // Push sorted results to the array
+    //     },
+    //   },
+    //   {
+    //     $project: {
+    //       _id: 0,
+    //       count: 1,
+    //       results: {
+    //         $slice: [
+    //           '$results',
+    //           parseInt(page) * parseInt(limit),
+    //           parseInt(limit),
+    //         ],
+    //       }, // Apply pagination to sorted results array
+    //     },
+    //   },
+    // ]);
 
-    // const fuel = await Fuel.find({
-    //   createdBy: userId,
-    // });
+    const fuel = await Fuel.find(
+      {
+        createdBy: userId,
+        ...(search && {
+          $or: [{ receiptId: new RegExp(search, 'i') }],
+        }),
+      },
+      ['to', 'date', 'receiptId', 'totalAmount'],
+      {
+        sort: {
+          createdAt: -1,
+        },
+        skip: parseInt(page) * parseInt(limit),
+        limit: parseInt(limit),
+      }
+    )
+      .populate('vehicleId', ['registration.plateNumber'])
+      .populate('driverId', ['firstName', 'lastName']);
+
+    if (!fuel) throw new Error(`Error while fetching Fuels`);
+
+    const newFuel = fuel.map((fuel) => ({
+      ...fuel.toObject(),
+      totalAmount: parseFloat(fuel.totalAmount?.toString() || '0').toFixed(2),
+    }));
+
+    const fuelCount = await Fuel.find({
+      createdBy: userId,
+      ...(search && {
+        $or: [{ receiptId: new RegExp(search, 'i') }],
+      }),
+    }).countDocuments();
 
     handleSuccess(res, {
       message: 'Fuel List Fetched Successfully',
-      data: fuel && fuel.length > 0 ? fuel[0] : { count: 0, results: [] },
+      data: {
+        results: newFuel,
+        count: fuelCount,
+      },
       // data: fuel,
     });
   } catch (error) {

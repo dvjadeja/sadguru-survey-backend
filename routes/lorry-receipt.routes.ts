@@ -4,6 +4,7 @@ import {
   createLorryReceipt,
   getLorryReceipt,
   listLorryReceipt,
+  printLorryReceipt,
   updateLorryReceipt,
 } from '../controllers/lorryReceipt.controllers';
 
@@ -13,5 +14,6 @@ router.get('/list', isAuthenticated, listLorryReceipt);
 router.get('/', isAuthenticated, getLorryReceipt);
 router.post('/create', isAuthenticated, createLorryReceipt);
 router.put('/update', isAuthenticated, updateLorryReceipt);
+router.get('/print', isAuthenticated, printLorryReceipt);
 
 export default router;

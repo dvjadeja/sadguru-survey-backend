@@ -384,3 +384,47 @@ export const updateLorryReceipt = async (req: Request, res: Response) => {
     });
   }
 };
+
+export const printLorryReceipt = async (req: Request, res: Response) => {
+  try {
+    const { userId } = res.locals.user;
+    const { startDate, endDate, ledgerIds, vehicleIds }: any = req.query;
+
+    const lorryReceiptCondition: any = {
+      createdBy: userId,
+    };
+
+    if (startDate && endDate) {
+      lorryReceiptCondition.date = {
+        $gte: startDate,
+        $lte: endDate,
+      };
+    }
+
+    if (ledgerIds) {
+      const billingParty = ledgerIds.split(',');
+      lorryReceiptCondition.billingParty = { $in: billingParty };
+    }
+
+    if (vehicleIds) {
+      const vehicleId = vehicleIds.split(',');
+      lorryReceiptCondition.vehicleId = { $in: vehicleId };
+    }
+
+    const lorryReceipts = await LorryReceipt.find(lorryReceiptCondition)
+      .populate('billingParty', ['legalName'])
+      .populate('vehicleId', ['registration.plateNumber']);
+
+    if (!lorryReceipts) throw new Error('Lorry receipt not found');
+
+    handleSuccess(res, {
+      message: 'Lorry receipt fetched successfully',
+      data: lorryReceipts,
+    });
+  } catch (error) {
+    handleErrors(req, res, {
+      message: 'Error while fetching lorry receipt',
+      error,
+    });
+  }
+};
