@@ -2,6 +2,16 @@ import { model, Schema } from 'mongoose';
 
 const driverSchema = new Schema(
   {
+    joiningDate: {
+      type: Date,
+      required: true,
+    },
+    status: {
+      type: String,
+      enum: ['ACTIVE', 'INACTIVE'],
+      default: 'ACTIVE',
+    },
+    leavingDate: Date,
     firstName: {
       type: String,
       required: true,
@@ -47,9 +57,10 @@ const driverSchema = new Schema(
       required: true,
       default: 0,
     },
-    onboardingFuel: {
+    joiningFuelFinger: {
       type: Number,
       required: true,
+      default: 0,
     },
     createdBy: {
       type: Schema.Types.ObjectId,

@@ -108,7 +108,8 @@ export const createDriver = async (req: Request, res: Response) => {
       .optional(),
     assignedVehicle: z.string().optional(),
     adharCard: z.string(),
-    onboardingFuel: z.number(),
+    joiningDate: z.string(),
+    joiningFuelFinger: z.number(),
   });
 
   const session = await db.startSession();
@@ -154,7 +155,6 @@ export const createDriver = async (req: Request, res: Response) => {
 
     const newDriver = new Driver({
       ...driverPayload,
-      onboardingFuel: driverPayload?.onboardingFuel,
       createdBy: userId,
     });
 
@@ -223,8 +223,9 @@ export const updateDriver = async (req: Request, res: Response) => {
       .optional(),
     assignedVehicle: z.string().optional(),
     availableFuel: z.number().optional(),
-    onboardingFuel: z.number().optional(),
     adharCard: z.string().optional(),
+    joiningDate: z.string().optional(),
+    joiningFuelFinger: z.number().optional(),
   });
 
   try {
