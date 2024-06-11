@@ -4,6 +4,7 @@ import { z } from 'zod';
 import db from '../setups/mongo';
 import { LorryReceipt, Vehicle } from '../models';
 import { handleErrors, handleSuccess } from '../utils/response.utils';
+import { getStartAndEnd } from '../utils/utilities';
 
 export const createLorryReceipt = async (req: Request, res: Response) => {
   const lorryReceiptValidator = z.object({
@@ -388,7 +389,8 @@ export const updateLorryReceipt = async (req: Request, res: Response) => {
 export const printLorryReceipt = async (req: Request, res: Response) => {
   try {
     const { userId } = res.locals.user;
-    const { startDate, endDate, ledgerIds, vehicleIds }: any = req.query;
+    const { startDate, endDate, ledgerIds, vehicleIds, singleDate }: any =
+      req.query;
 
     const lorryReceiptCondition: any = {
       createdBy: userId,
@@ -398,6 +400,16 @@ export const printLorryReceipt = async (req: Request, res: Response) => {
       lorryReceiptCondition.date = {
         $gte: startDate,
         $lte: endDate,
+      };
+    }
+
+    if (singleDate) {
+      const { startDate: singleStartDate, endDate: singleEndDate } =
+        getStartAndEnd(singleDate);
+
+      lorryReceiptCondition.date = {
+        $gte: singleStartDate,
+        $lte: singleEndDate,
       };
     }
 
@@ -413,7 +425,20 @@ export const printLorryReceipt = async (req: Request, res: Response) => {
 
     const lorryReceipts = await LorryReceipt.find(lorryReceiptCondition)
       .populate('billingParty', ['legalName'])
-      .populate('vehicleId', ['registration.plateNumber']);
+      .populate({
+        path: 'vehicleId',
+        model: 'Vehicle',
+        select: 'registration.plateNumber',
+        populate: {
+          path: 'assignedDriver',
+          model: 'Driver',
+          select: {
+            firstName: 1,
+            lastName: 1,
+            'phoneNumber.primary': 1,
+          },
+        },
+      });
 
     if (!lorryReceipts) throw new Error('Lorry receipt not found');
 

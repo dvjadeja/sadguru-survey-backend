@@ -80,7 +80,7 @@ export const login = async (req: Request, res: Response) => {
 
     // Add 3 days to today's date
     var afterThreeDays = new Date(today);
-    afterThreeDays.setDate(today.getDate() + 3);
+    afterThreeDays.setDate(today.getDate() + 1);
 
     // Convert the date to Unix timestamp format
     var unixTimestamp = Math.floor(afterThreeDays.getTime() / 1000);
