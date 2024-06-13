@@ -57,6 +57,12 @@ const vehicleSchema = new Schema(
       type: Schema.Types.ObjectId,
       ref: 'Driver',
     },
+    pucLink: String,
+    rcLink: String,
+    permitLink: String,
+    insuranceLink: String,
+    taxLink: String,
+    fitnessLink: String,
     createdBy: {
       type: Schema.Types.ObjectId,
       ref: 'User',

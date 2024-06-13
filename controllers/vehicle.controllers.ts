@@ -119,6 +119,12 @@ export const createVehicle = async (req: Request, res: Response) => {
     }),
     puc: z.string(),
     permit: z.string(),
+    pucLink: z.string().optional(),
+    rcLink: z.string().optional(),
+    permitLink: z.string().optional(),
+    insuranceLink: z.string().optional(),
+    taxLink: z.string().optional(),
+    fitnessLink: z.string().optional(),
   });
   try {
     vehicleValidator.parse(req.body);
@@ -194,6 +200,12 @@ export const updateVehicle = async (req: Request, res: Response) => {
     }),
     puc: z.string(),
     permit: z.string(),
+    pucLink: z.string().optional(),
+    rcLink: z.string().optional(),
+    permitLink: z.string().optional(),
+    insuranceLink: z.string().optional(),
+    taxLink: z.string().optional(),
+    fitnessLink: z.string().optional(),
   });
   try {
     vehicleValidator.parse(req.body);
