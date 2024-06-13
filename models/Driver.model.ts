@@ -34,7 +34,6 @@ const driverSchema = new Schema(
         type: String,
         required: true,
       },
-      secondary: String,
     },
     adharCard: {
       type: String,
@@ -62,6 +61,8 @@ const driverSchema = new Schema(
       required: true,
       default: 0,
     },
+    aadharCardLink: String,
+    licenseLink: String,
     createdBy: {
       type: Schema.Types.ObjectId,
       ref: 'User',

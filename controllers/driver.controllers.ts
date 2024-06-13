@@ -95,7 +95,6 @@ export const createDriver = async (req: Request, res: Response) => {
     licenseExpirationDate: z.string(),
     phoneNumber: z.object({
       primary: z.string(),
-      secondary: z.string().optional(),
     }),
     address: z
       .object({
@@ -110,6 +109,8 @@ export const createDriver = async (req: Request, res: Response) => {
     adharCard: z.string(),
     joiningDate: z.string(),
     joiningFuelFinger: z.number(),
+    aadharCardLink: z.string().optional(),
+    licenseLink: z.string().optional(),
   });
 
   const session = await db.startSession();
@@ -208,7 +209,6 @@ export const updateDriver = async (req: Request, res: Response) => {
     phoneNumber: z
       .object({
         primary: z.string().optional(),
-        secondary: z.string().optional(),
       })
       .optional(),
     email: z.string().optional(),
@@ -226,6 +226,8 @@ export const updateDriver = async (req: Request, res: Response) => {
     adharCard: z.string().optional(),
     joiningDate: z.string().optional(),
     joiningFuelFinger: z.number().optional(),
+    aadharCardLink: z.string().optional(),
+    licenseLink: z.string().optional(),
   });
 
   try {
