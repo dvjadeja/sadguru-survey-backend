@@ -3,6 +3,7 @@ import { Driver, Fuel, Maintenance, Users, Vehicle, Vendor } from '../models';
 import { handleErrors, handleSuccess } from '../utils/response.utils';
 import { z } from 'zod';
 import db from '../setups/mongo';
+import { populate } from 'dotenv';
 
 export const listFuel = async (req: Request, res: Response) => {
   try {
@@ -154,6 +155,7 @@ export const listFuel = async (req: Request, res: Response) => {
         limit: parseInt(limit),
       }
     )
+      .populate('vendorId', ['name'])
       .populate('vehicleId', ['registration.plateNumber'])
       .populate('driverId', ['firstName', 'lastName']);
 
