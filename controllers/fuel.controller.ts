@@ -1,14 +1,14 @@
 import { Request, Response } from 'express';
-import { Driver, Fuel, Maintenance, Users, Vehicle, Vendor } from '../models';
+import { Driver, Fuel, Users, Vehicle, Vendor } from '../models';
 import { handleErrors, handleSuccess } from '../utils/response.utils';
 import { z } from 'zod';
 import db from '../setups/mongo';
-import { populate } from 'dotenv';
+import { getStartAndEnd } from '../utils/utilities';
 
 export const listFuel = async (req: Request, res: Response) => {
   try {
     const { userId } = res.locals.user;
-    const { page, limit = 10, search }: any = req.query;
+    const { page = 0, limit = 10, search }: any = req.query;
 
     // const fuel = await Fuel.aggregate([
     //   {
@@ -294,20 +294,6 @@ export const createFuel = async (req: Request, res: Response) => {
       throw new Error('Invalid bill amount');
     }
 
-    // Add Maintenance record from the newly created fuel
-    const maintenance = new Maintenance({
-      billNumber: `${user?.company?.prefix}/FUEL/${fuelCount + 1}`,
-      billDate: fuelPayload.date,
-      vendorId: fuelPayload.vendorId,
-      vehicleId: fuelPayload.vehicleId,
-      billAmount: fuelPayload.totalAmount,
-      createdBy: userId,
-    });
-
-    const newMaintenance = await maintenance.save({ session: session });
-
-    if (!newMaintenance) throw new Error('Maintenance not created');
-
     // If all updates succeed, commit the transaction
     await session.commitTransaction();
     session.endSession();
@@ -357,6 +343,63 @@ export const getFuel = async (req: Request, res: Response) => {
     handleSuccess(res, {
       message: 'Fuel Fetched Successfully',
       data: data,
+    });
+  } catch (error) {
+    handleErrors(req, res, {
+      message: 'Error while fetching Fuel',
+      error,
+    });
+  }
+};
+
+export const printFuel = async (req: Request, res: Response) => {
+  try {
+    const { userId } = res.locals.user;
+    const { startDate, endDate, vehicleIds, vendorIds, singleDate }: any =
+      req.query;
+
+    const fuelCondition: any = {
+      createdBy: userId,
+    };
+
+    if (startDate && endDate) {
+      fuelCondition.date = {
+        $gte: startDate,
+        $lte: endDate,
+      };
+    }
+
+    if (singleDate) {
+      const { startDate: singleStartDate, endDate: singleEndDate } =
+        getStartAndEnd(singleDate);
+      fuelCondition.date = {
+        $gte: singleStartDate,
+        $lt: singleEndDate,
+      };
+    }
+
+    if (vehicleIds) {
+      const vehicleId = vehicleIds.split(',');
+      fuelCondition.vehicleId = { $in: vehicleId };
+    }
+
+    if (vendorIds) {
+      const vendorId = vendorIds.split(',');
+      fuelCondition.vendorId = { $in: vendorId };
+    }
+
+    const fuel = await Fuel.find(fuelCondition)
+      .populate('vehicleId', ['registration.plateNumber'])
+      .populate('driverId', ['firstName', 'lastName'])
+      .populate('vendorId', ['name']);
+
+    console.log(fuel);
+
+    if (!fuel) throw new Error(`Fuel not found`);
+
+    handleSuccess(res, {
+      message: 'Fuel Fetched Successfully',
+      data: fuel,
     });
   } catch (error) {
     handleErrors(req, res, {
