@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { Driver, Fuel, Users, Vehicle } from '../models';
+import { Driver, Fuel, Maintenance, Users, Vehicle, Vendor } from '../models';
 import { handleErrors, handleSuccess } from '../utils/response.utils';
 import { z } from 'zod';
 import db from '../setups/mongo';
@@ -145,7 +145,7 @@ export const listFuel = async (req: Request, res: Response) => {
           $or: [{ receiptId: new RegExp(search, 'i') }],
         }),
       },
-      ['to', 'date', 'receiptId', 'totalAmount'],
+      ['date', 'receiptId', 'totalAmount'],
       {
         sort: {
           createdAt: -1,
@@ -189,7 +189,7 @@ export const listFuel = async (req: Request, res: Response) => {
 
 export const createFuel = async (req: Request, res: Response) => {
   const fuelValidator = z.object({
-    to: z.string(),
+    vendorId: z.string(),
     vehicleId: z.string(),
     date: z.string(),
     expenses: z.array(
@@ -233,7 +233,6 @@ export const createFuel = async (req: Request, res: Response) => {
       throw new Error('Please Select a vehicle with driver assigned');
 
     const fuel = new Fuel({
-      to: fuelPayload.to,
       vehicleId: fuelPayload.vehicleId,
       date: fuelPayload.date,
       driverId: vehicleFound.assignedDriver,
@@ -241,6 +240,7 @@ export const createFuel = async (req: Request, res: Response) => {
       createdBy: userId,
       expenses: fuelPayload.expenses,
       totalAmount: fuelPayload.totalAmount,
+      vendorId: fuelPayload.vendorId,
     });
 
     const newFuel = await fuel.save({ session: session });
@@ -271,6 +271,41 @@ export const createFuel = async (req: Request, res: Response) => {
       if (!driver || !vehicle) throw new Error('Driver or Vehicle not found');
     }
 
+    // Update Vendor totalAmount & pending amount
+    const vendor = await Vendor.findOne({
+      _id: fuelPayload.vendorId,
+      createdBy: userId,
+    });
+
+    if (!vendor) throw new Error('Vendor not found');
+
+    if (!isNaN(parseFloat(fuelPayload.totalAmount))) {
+      vendor.totalAmount = (
+        parseFloat(vendor.totalAmount) + parseFloat(fuelPayload.totalAmount)
+      ).toString();
+      vendor.pendingAmount = (
+        parseFloat(vendor.pendingAmount) + parseFloat(fuelPayload.totalAmount)
+      ).toString();
+
+      await vendor.save({ session: session });
+    } else {
+      throw new Error('Invalid bill amount');
+    }
+
+    // Add Maintenance record from the newly created fuel
+    const maintenance = new Maintenance({
+      billNumber: `${user?.company?.prefix}/FUEL/${fuelCount + 1}`,
+      billDate: fuelPayload.date,
+      vendorId: fuelPayload.vendorId,
+      vehicleId: fuelPayload.vehicleId,
+      billAmount: fuelPayload.totalAmount,
+      createdBy: userId,
+    });
+
+    const newMaintenance = await maintenance.save({ session: session });
+
+    if (!newMaintenance) throw new Error('Maintenance not created');
+
     // If all updates succeed, commit the transaction
     await session.commitTransaction();
     session.endSession();
@@ -299,6 +334,7 @@ export const getFuel = async (req: Request, res: Response) => {
     const fuel = await Fuel.findOne({
       $and: [{ _id: id }, { createdBy: userId }],
     })
+      .populate('vendorId', ['name'])
       .populate('vehicleId', ['registration.plateNumber'])
       .populate('driverId', ['firstName', 'lastName']);
 

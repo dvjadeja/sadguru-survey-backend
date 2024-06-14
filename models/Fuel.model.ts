@@ -21,8 +21,9 @@ const expensesSchema = {
 
 const fuelSchema = new Schema(
   {
-    to: {
-      type: String,
+    vendorId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Vendor',
       required: true,
     },
     driverId: {
