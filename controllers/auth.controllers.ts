@@ -78,7 +78,7 @@ export const login = async (req: Request, res: Response) => {
     // Get today's date
     var today = new Date();
 
-    // Add 3 days to today's date
+    // Add 1 days to today's date
     var afterThreeDays = new Date(today);
     afterThreeDays.setDate(today.getDate() + 1);
 

@@ -7,7 +7,7 @@ import db from '../setups/mongo';
 export const listDailyLogs = async (req: Request, res: Response) => {
   try {
     const { userId } = res.locals.user;
-    const { page, limit = 10, search }: any = req.query;
+    const { page = 0, limit = 10, search }: any = req.query;
 
     const dailyLogs: any = await DailyLog.aggregate([
       {

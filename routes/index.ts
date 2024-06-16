@@ -13,6 +13,7 @@ import ledgerRoutes from './ledger.routes';
 import lorryReceiptRoutes from './lorry-receipt.routes';
 import dashboardRoutes from './dashboard.routes';
 import filesRoutes from './files.routes';
+import localTripRoutes from './local-trip.routes';
 
 export const registerRoutes = (app: Express) => {
   app.use('/api/v1/auth', authRoutes);
@@ -28,4 +29,5 @@ export const registerRoutes = (app: Express) => {
   app.use('/api/v1/lorry-receipt', lorryReceiptRoutes);
   app.use('/api/v1/dashboard', dashboardRoutes);
   app.use('/api/v1/files', filesRoutes);
+  app.use('/api/v1/local-trip', localTripRoutes);
 };
