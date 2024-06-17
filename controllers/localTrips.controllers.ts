@@ -65,6 +65,7 @@ export const listLocalTrips = async (req: Request, res: Response) => {
           'billingParty.legalName': 1,
           from: 1,
           to: 1,
+          invoiceStatus: 1,
         },
       },
       {
@@ -130,15 +131,12 @@ export const createLocalTrip = async (req: Request, res: Response) => {
 
     const { userId } = res.locals.user;
 
-    console.log('req.body', req.body);
-
     const newLocalTrip = new LocalTrip({
       ...req.body,
       createdBy: userId,
     });
 
     const registerLocalTrip = await newLocalTrip.save({ session: session });
-    console.log('registerLocalTrip', registerLocalTrip);
 
     if (!registerLocalTrip) throw new Error('Error While Creating Local Trip');
 
@@ -191,6 +189,100 @@ export const getLocalTrip = async (req: Request, res: Response) => {
   } catch (error) {
     handleErrors(req, res, {
       message: 'Error while fetching local trip',
+      error,
+    });
+  }
+};
+
+export const updateLocalTrip = async (req: Request, res: Response) => {
+  const localTripValidator = z.object({
+    localTripId: z.string(),
+    date: z.string().optional(),
+    vehicleId: z.string().optional(),
+    containerNo: z.string().optional(),
+    containerSize: z.enum(['20', '40']).optional(),
+    containerType: z.enum(['EMPTY', 'LOADED']).optional(),
+    gateInOutMode: z.enum(['INBLOCK', 'RE EXPORT']).optional(),
+    billingParty: z.string().optional(),
+    from: z.string().optional(),
+    to: z.string().optional(),
+    rate: z.number().optional(),
+    diesel: z.number().optional(),
+    driverIncentive: z.number().optional(),
+    tollPlazaAmount: z.number().optional(),
+    advance: z.number().optional(),
+    remarks: z.string().optional(),
+  });
+
+  // Initiate transaction
+  const session = await db.startSession();
+  // Start transaction
+  session.startTransaction();
+
+  try {
+    localTripValidator.parse(req.body);
+
+    const { userId } = res.locals.user;
+    const localTrip = await LocalTrip.findOne({
+      $and: [{ _id: req.body.localTripId }, { createdBy: userId }],
+    });
+
+    if (!localTrip) throw new Error('Local Trip not found');
+
+    const updatedLocalTrip = await LocalTrip.findOneAndUpdate(
+      { _id: req.body.localTripId, createdBy: userId },
+      { ...req.body },
+      { new: true, session: session }
+    );
+
+    if (!updatedLocalTrip) throw new Error('Error While Updating Local Trip');
+
+    /*  Update Vehicle fuel.availableFuel by adding old fuel 
+        from old record of local trip diesel and then subtracting the new fuel
+    */
+    if (req.body?.diesel && localTrip?.diesel !== req.body?.diesel) {
+      const vehicle = await Vehicle.findOne({
+        _id: localTrip.vehicleId,
+      });
+
+      if (!vehicle) throw new Error('Vehicle not found');
+
+      if (vehicle.fuel && vehicle.fuel.availableFuel) {
+        const oldFuel = vehicle?.fuel?.availableFuel + localTrip.diesel;
+        const newFuel = oldFuel - req.body?.diesel;
+
+        const updatedVehicle = await Vehicle.findOneAndUpdate(
+          { _id: localTrip.vehicleId, createdBy: userId },
+          {
+            $set: {
+              fuel: {
+                availableFuel: newFuel,
+                fuelCapacity: vehicle.fuel.fuelCapacity,
+              },
+            },
+          },
+          { new: true, session: session }
+        );
+
+        if (!updatedVehicle) throw new Error('Error While Updating Vehicle');
+      }
+    }
+
+    if (updatedLocalTrip) {
+      // If all updates succeed, commit the transaction
+      await session.commitTransaction();
+      session.endSession();
+
+      handleSuccess(res, {
+        message: 'Local Trip Updated Successfully',
+        data: updatedLocalTrip,
+      });
+    }
+  } catch (error) {
+    await session.commitTransaction();
+    session.endSession();
+    handleErrors(req, res, {
+      message: 'Error while updating local trip',
       error,
     });
   }

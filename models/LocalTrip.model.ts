@@ -55,6 +55,12 @@ const localTripSchema = new Schema(
     tollPlazaAmount: Number,
     advance: Number,
     remarks: String,
+    invoiceStatus: {
+      type: String,
+      enum: ['PENDING', 'GENERATED'],
+      default: 'PENDING',
+      required: true,
+    },
     createdBy: {
       type: Schema.Types.ObjectId,
       ref: 'User',
