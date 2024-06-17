@@ -127,13 +127,13 @@ export const authMe = async (req: Request, res: Response) => {
     if (!user) throw new Error('User not found');
 
     handleSuccess(res, {
-      message: 'User Logged in Successfully',
+      message: 'User Authenticated Successfully',
       data: user,
     });
   } catch (error) {
     handleErrors(req, res, {
       status: 500,
-      message: 'Error while logged in user.',
+      message: 'Error while Authenticating user.',
       error,
     });
   }
