@@ -51,10 +51,22 @@ const localTripSchema = new Schema(
       type: Number,
       required: true,
     },
-    driverIncentive: Number,
-    tollPlazaAmount: Number,
-    advance: Number,
-    remarks: String,
+    driverIncentive: {
+      type: Number,
+      default: 0,
+    },
+    tollPlazaAmount: {
+      type: Number,
+      default: 0,
+    },
+    advance: {
+      type: Number,
+      default: 0,
+    },
+    remarks: {
+      type: String,
+      default: '',
+    },
     invoiceStatus: {
       type: String,
       enum: ['PENDING', 'GENERATED'],

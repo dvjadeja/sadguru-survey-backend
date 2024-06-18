@@ -1,9 +1,30 @@
 import { Request, Response } from 'express';
+import xlxs from 'xlsx';
 
-import { LocalTrip, Vehicle } from '../models';
+import { Ledger, LocalTrip, Vehicle } from '../models';
 import { handleErrors, handleSuccess } from '../utils/response.utils';
 import db from '../setups/mongo';
 import { z } from 'zod';
+import { excelDateToJSDate, isDateSerial } from '../utils/xlxs.utils';
+
+// Define the mapping of Excel headers to schema fields
+const headerMapping: { [key: string]: string } = {
+  DATE: 'date',
+  'VEHICLE NO': 'vehicleId',
+  'CONTAINER NO': 'containerNo',
+  SIZE: 'containerSize',
+  'CONTAINER TYPE': 'containerType',
+  'TRIP TYPE': 'gateInOutMode',
+  'BILLING PARTY': 'billingParty',
+  FROM: 'from',
+  TO: 'to',
+  RATE: 'rate',
+  DIESEL: 'diesel',
+  'DRIVER INCENTIVE': 'driverIncentive',
+  TOLL: 'tollPlazaAmount',
+  ADVANCE: 'advance',
+  REMARKS: 'remarks',
+};
 
 export const listLocalTrips = async (req: Request, res: Response) => {
   try {
@@ -160,7 +181,7 @@ export const createLocalTrip = async (req: Request, res: Response) => {
       });
     }
   } catch (error) {
-    await session.commitTransaction();
+    await session.abortTransaction();
     session.endSession();
     handleErrors(req, res, {
       message: 'Error while creating local trip',
@@ -283,6 +304,280 @@ export const updateLocalTrip = async (req: Request, res: Response) => {
     session.endSession();
     handleErrors(req, res, {
       message: 'Error while updating local trip',
+      error,
+    });
+  }
+};
+
+export const validateExcelImport = async (req: Request, res: Response) => {
+  // Initiate transaction
+  const session = await db.startSession();
+
+  // Start transaction
+  session.startTransaction();
+  try {
+    if (!req.file) throw new Error('File not found');
+
+    const { userId } = res.locals.user;
+
+    // Read and parse Excel file
+    const workbook = xlxs.read(req.file.buffer, {
+      type: 'buffer',
+    });
+    const sheetName = workbook.SheetNames[0];
+    const sheet = workbook.Sheets[sheetName];
+    const data: any[][] = xlxs.utils.sheet_to_json(sheet, { header: 1 });
+
+    // Extract Headers
+    const headers = data[0];
+    const rows = data.slice(1);
+
+    let errors: { row: number; errors: string[] }[] = [];
+    let validRows: any[] = [];
+
+    for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
+      let row = rows[rowIndex];
+      let rowErrors: string[] = [];
+      let rowData: any = {};
+
+      for (let i = 0; i < headers.length; i++) {
+        const header = headers[i];
+        const schemaKey = headerMapping[header];
+        const value = row[i];
+
+        // Validate and process fields
+        switch (schemaKey) {
+          case 'date':
+            let dateValue: Date | null = null;
+            if (typeof value === 'string' && !isNaN(Date.parse(value))) {
+              dateValue = new Date(value);
+            } else if (isDateSerial(value)) {
+              dateValue = excelDateToJSDate(value);
+            }
+
+            if (!dateValue) {
+              rowErrors.push(`Invalid date at row ${rowIndex + 2}`);
+            } else {
+              rowData.date = dateValue;
+            }
+            break;
+          case 'containerNo':
+            if (!value) {
+              rowErrors.push(`${header} is required at row ${rowIndex + 2}`);
+            } else {
+              rowData[schemaKey] = value;
+            }
+            break;
+          case 'containerSize':
+            if (!['20', '40', 20, 40].includes(value)) {
+              rowErrors.push(`Invalid value for SIZE at row ${rowIndex + 2}`);
+            } else {
+              rowData[schemaKey] = value;
+            }
+            break;
+          case 'containerType':
+            if (!['EMPTY', 'LOADED'].includes(value)) {
+              rowErrors.push(
+                `Invalid value for CONTAINER TYPE at row ${rowIndex + 2}`
+              );
+            } else {
+              rowData[schemaKey] = value;
+            }
+            break;
+          case 'gateInOutMode':
+            if (!['INBLOCK', 'RE EXPORT'].includes(value)) {
+              rowErrors.push(
+                `Invalid value for TRIP TYPE at row ${rowIndex + 2}`
+              );
+            } else {
+              rowData[schemaKey] = value;
+            }
+            break;
+          case 'from':
+            if (!value) {
+              rowErrors.push(`${header} is required at row ${rowIndex + 2}`);
+            } else {
+              rowData[schemaKey] = value;
+            }
+            break;
+          case 'to':
+            if (!value) {
+              rowErrors.push(`${header} is required at row ${rowIndex + 2}`);
+            } else {
+              rowData[schemaKey] = value;
+            }
+            break;
+          case 'rate':
+            if (value === undefined || isNaN(value)) {
+              rowErrors.push(
+                `Invalid number for ${header} at row ${rowIndex + 2}`
+              );
+            } else {
+              rowData[schemaKey] = Number(value);
+            }
+            break;
+          case 'diesel':
+            if (value === undefined || isNaN(value)) {
+              rowErrors.push(
+                `Invalid number for ${header} at row ${rowIndex + 2}`
+              );
+            } else {
+              rowData[schemaKey] = Number(value);
+            }
+            break;
+          case 'driverIncentive':
+            if (value !== undefined && isNaN(value)) {
+              rowErrors.push(
+                `Invalid number for ${header} at row ${rowIndex + 2}`
+              );
+            } else {
+              rowData[schemaKey] = value !== undefined ? Number(value) : 0;
+            }
+            break;
+          case 'tollPlazaAmount':
+            if (value !== undefined && isNaN(value)) {
+              rowErrors.push(
+                `Invalid number for ${header} at row ${rowIndex + 2}`
+              );
+            } else {
+              rowData[schemaKey] = value !== undefined ? Number(value) : 0;
+            }
+          case 'advance':
+            if (value !== undefined && isNaN(value)) {
+              rowErrors.push(
+                `Invalid number for ${header} at row ${rowIndex + 2}`
+              );
+            } else {
+              rowData[schemaKey] = value !== undefined ? Number(value) : 0;
+            }
+            break;
+          case 'remarks':
+            if (value !== undefined && typeof value !== 'string') {
+              rowErrors.push(`${header} is required at row ${rowIndex + 2}`);
+            } else {
+              rowData[schemaKey] = value !== undefined ? value : '';
+            }
+            break;
+          default:
+            break;
+        }
+      }
+
+      for (let i = 0; i < headers.length; i++) {
+        const header = headers[i];
+        const schemaKey = headerMapping[header];
+        const value = row[i];
+
+        if (schemaKey === 'vehicleId') {
+          const vehicle = await Vehicle.findOne({
+            createdBy: userId,
+            'registration.plateNumber': value,
+          });
+
+          if (!vehicle) {
+            rowErrors.push(
+              `Vehicle not found for VEHICLE NO: ${value} at row ${
+                rowIndex + 2
+              }`
+            );
+          } else {
+            rowData.vehicleId = vehicle._id.toString();
+            // Check if diesel amount is greater than availableFuel
+            if (
+              rowData.diesel !== undefined &&
+              vehicle?.fuel?.availableFuel &&
+              rowData.diesel > vehicle.fuel.availableFuel
+            ) {
+              rowErrors.push(
+                `Diesel amount (${
+                  rowData.diesel
+                }) is greater than available fuel (${
+                  vehicle.fuel.availableFuel
+                }) for VEHICLE NO: ${value} at row ${rowIndex + 2}`
+              );
+            }
+          }
+        } else if (schemaKey === 'billingParty') {
+          const ledger = await Ledger.findOne({
+            createdBy: userId,
+            legalName: value,
+          });
+
+          if (!ledger) {
+            rowErrors.push(
+              `Ledger not found for BILLING PARTY: ${value} at row ${
+                rowIndex + 2
+              }`
+            );
+          } else {
+            rowData.billingParty = ledger._id.toString();
+          }
+        }
+      }
+
+      if (rowErrors.length > 0) {
+        errors.push({
+          row: rowIndex + 2,
+          errors: rowErrors,
+        });
+      } else {
+        validRows.push({
+          ...rowData,
+          createdBy: userId,
+        });
+      }
+    }
+
+    if (errors.length > 0) {
+      await session.abortTransaction();
+      session.endSession();
+
+      console.log({
+        responseId: res.locals.responseId,
+        method: res.req.method,
+        url: res.req.originalUrl,
+        body: res.req.body,
+        params: res.req.params,
+        query: res.req.query,
+        code: 'SUCCESS',
+        status: 400,
+        errors,
+        message: 'Excel file validation failed',
+      });
+
+      return res.status(400).json({
+        code: 'SUCCESS',
+        message: 'Excel file validation failed',
+        errors,
+      });
+    }
+
+    // insert validRows into database
+    for (let row of validRows) {
+      await LocalTrip.create([row], { session });
+      await Vehicle.findOneAndUpdate(
+        { _id: row?.vehicleId },
+        {
+          $inc: { 'fuel.availableFuel': -row.diesel },
+        },
+        { new: true, session }
+      );
+    }
+
+    await session.commitTransaction();
+    session.endSession();
+
+    handleSuccess(res, {
+      message: 'Excel file validation & Added to Local Trips',
+      status: 200,
+    });
+  } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+
+    handleErrors(req, res, {
+      status: 500,
+      message: 'Error while validating excel file',
       error,
     });
   }

@@ -393,8 +393,6 @@ export const printFuel = async (req: Request, res: Response) => {
       .populate('driverId', ['firstName', 'lastName'])
       .populate('vendorId', ['name']);
 
-    console.log(fuel);
-
     if (!fuel) throw new Error(`Fuel not found`);
 
     handleSuccess(res, {
