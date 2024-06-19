@@ -143,6 +143,7 @@ export const createMaintenance = async (req: Request, res: Response) => {
 
       handleSuccess(res, {
         message: 'Maintenance Created Successfully',
+        data: registerMaintenance,
       });
     }
   } catch (error) {
@@ -244,6 +245,7 @@ export const updateMaintenance = async (req: Request, res: Response) => {
       session.endSession();
       handleSuccess(res, {
         message: 'Maintenance Updated Successfully',
+        data: updatedMaintenance,
       });
     }
   } catch (error) {

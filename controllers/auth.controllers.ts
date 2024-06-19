@@ -199,3 +199,27 @@ export const updatePassword = async (req: Request, res: Response) => {
     });
   }
 };
+
+export const getUserData = async (req: Request, res: Response) => {
+  try {
+    const { userId } = res.locals.user;
+
+    const user = await Users.findById({ _id: userId });
+
+    if (!user) throw new Error('User not found');
+
+    // Exclude password from response
+    const { password, ...userData } = user.toObject();
+
+    handleSuccess(res, {
+      message: 'User Data Fetched Successfully',
+      data: userData,
+    });
+  } catch (error) {
+    handleErrors(req, res, {
+      status: 500,
+      message: 'Error while fetching user data.',
+      error,
+    });
+  }
+};
