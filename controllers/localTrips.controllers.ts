@@ -7,6 +7,34 @@ import db from '../setups/mongo';
 import { z } from 'zod';
 import { excelDateToJSDate, isDateSerial } from '../utils/xlxs.utils';
 
+interface VehicleDieselTotals {
+  [key: string]: number;
+}
+
+interface RowData {
+  date?: Date;
+  containerNo?: string;
+  containerSize?: string | number;
+  containerType?: string;
+  gateInOutMode?: string;
+  from?: string;
+  to?: string;
+  rate?: number;
+  diesel?: number;
+  driverIncentive?: number;
+  tollPlazaAmount?: number;
+  advance?: number;
+  remarks?: string;
+  vehicleId?: string;
+  billingParty?: string;
+  createdBy?: string;
+}
+
+interface ValidationError {
+  row: number;
+  errors: string[];
+}
+
 // Define the mapping of Excel headers to schema fields
 const headerMapping: { [key: string]: string } = {
   DATE: 'date',
@@ -332,13 +360,14 @@ export const validateExcelImport = async (req: Request, res: Response) => {
     const headers = data[0];
     const rows = data.slice(1);
 
-    let errors: { row: number; errors: string[] }[] = [];
-    let validRows: any[] = [];
+    let errors: ValidationError[] = [];
+    let validRows: RowData[] = [];
+    let vehicleDieselTotals: VehicleDieselTotals = {}; // To store total diesel required for each vehicle
 
     for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
       let row = rows[rowIndex];
       let rowErrors: string[] = [];
-      let rowData: any = {};
+      let rowData: RowData = {};
 
       for (let i = 0; i < headers.length; i++) {
         const header = headers[i];
@@ -482,20 +511,30 @@ export const validateExcelImport = async (req: Request, res: Response) => {
             );
           } else {
             rowData.vehicleId = vehicle._id.toString();
-            // Check if diesel amount is greater than availableFuel
-            if (
-              rowData.diesel !== undefined &&
-              vehicle?.fuel?.availableFuel &&
-              rowData.diesel > vehicle.fuel.availableFuel
-            ) {
-              rowErrors.push(
-                `Diesel amount (${
-                  rowData.diesel
-                }) is greater than available fuel (${
-                  vehicle.fuel.availableFuel
-                }) for VEHICLE NO: ${value} at row ${rowIndex + 2}`
-              );
+
+            // Track total diesel required for this vehicle
+            if (rowData.diesel !== undefined) {
+              if (!vehicleDieselTotals[rowData.vehicleId]) {
+                vehicleDieselTotals[rowData.vehicleId] = 0;
+              }
+
+              vehicleDieselTotals[rowData.vehicleId] += rowData.diesel;
             }
+
+            // Check if diesel amount is greater than availableFuel
+            // if (
+            //   rowData.diesel !== undefined &&
+            //   vehicle?.fuel?.availableFuel &&
+            //   rowData.diesel > vehicle.fuel.availableFuel
+            // ) {
+            //   rowErrors.push(
+            //     `Diesel amount (${
+            //       rowData.diesel
+            //     }) is greater than available fuel (${
+            //       vehicle.fuel.availableFuel
+            //     }) for VEHICLE NO: ${value} at row ${rowIndex + 2}`
+            //   );
+            // }
           }
         } else if (schemaKey === 'billingParty') {
           const ledger = await Ledger.findOne({
@@ -528,6 +567,30 @@ export const validateExcelImport = async (req: Request, res: Response) => {
       }
     }
 
+    console.log('vehicleDieselTotals :: ', vehicleDieselTotals);
+
+    // Check if available fuel is sufficient for each vehicle
+    for (let vehicleId in vehicleDieselTotals) {
+      const vehicle = await Vehicle.findById(vehicleId);
+      if (
+        vehicle &&
+        vehicle.fuel?.availableFuel &&
+        vehicle.fuel.availableFuel < vehicleDieselTotals[vehicleId]
+      ) {
+        console.log('Fuel Details :: ', {
+          vehicleId,
+          vehicleDieselTotals: vehicleDieselTotals[vehicleId],
+          availableFuel: vehicle.fuel.availableFuel,
+        });
+        errors.push({
+          row: 0, // Adjust as necessary to indicate a vehicle-level error
+          errors: [
+            `VEHICLE NO: ${vehicle?.registration?.plateNumber} -> Total diesel required is (${vehicleDieselTotals[vehicleId]}L) is greater than available fuel (${vehicle.fuel.availableFuel}L)`,
+          ],
+        });
+      }
+    }
+
     if (errors.length > 0) {
       await session.abortTransaction();
       session.endSession();
@@ -552,16 +615,23 @@ export const validateExcelImport = async (req: Request, res: Response) => {
       });
     }
 
+    // Update Vehicle.fuel.availableFuel using the vehicleDieselTotals
+    for (let vehicleId in vehicleDieselTotals) {
+      await Vehicle.findOneAndUpdate(
+        { _id: vehicleId },
+        {
+          $inc: { 'fuel.availableFuel': -vehicleDieselTotals[vehicleId] },
+        },
+        {
+          new: true,
+          session,
+        }
+      );
+    }
+
     // insert validRows into database
     for (let row of validRows) {
       await LocalTrip.create([row], { session });
-      await Vehicle.findOneAndUpdate(
-        { _id: row?.vehicleId },
-        {
-          $inc: { 'fuel.availableFuel': -row.diesel },
-        },
-        { new: true, session }
-      );
     }
 
     await session.commitTransaction();
