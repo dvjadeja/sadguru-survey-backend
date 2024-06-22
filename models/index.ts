@@ -10,3 +10,4 @@ export { default as FeatureFlag } from './FeatureFlag.model';
 export { default as LorryReceipt } from './LorryReceipt.model';
 export { default as Ledger } from './Ledger.model';
 export { default as LocalTrip } from './LocalTrip.model';
+export { default as LorryReceiptInvoice } from './LorryReceiptInvoice.model';

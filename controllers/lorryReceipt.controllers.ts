@@ -453,3 +453,72 @@ export const printLorryReceipt = async (req: Request, res: Response) => {
     });
   }
 };
+
+export const getPendingLorryReceiptByLedger = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const { userId } = res.locals.user;
+    const { ledgerId }: any = req.query;
+
+    const lorryReceipts = await LorryReceipt.find(
+      {
+        createdBy: userId,
+        billingParty: ledgerId,
+        invoiceStatus: 'PENDING',
+      },
+      [
+        'date',
+        'lorryReceiptId',
+        'bookingNo',
+        'from',
+        'to',
+        'containerNo',
+        'containerSize',
+        'rate',
+        'detentionAmount',
+        'ownVehicle',
+        'marketTruckDetails.vehiclePlateNumber',
+        'ownOrganization',
+      ],
+      {
+        sort: {
+          createdAt: -1,
+        },
+      }
+    )
+      .populate('billingParty', ['legalName'])
+      .populate('vehicleId', ['registration.plateNumber']);
+
+    if (!lorryReceipts) throw new Error('Lorry receipt not found');
+
+    // count documents
+    const count = await LorryReceipt.countDocuments({
+      createdBy: userId,
+      billingParty: ledgerId,
+      invoiceStatus: 'PENDING',
+    });
+
+    const newLorryReceipt = lorryReceipts.map((lorryReceipt) => ({
+      ...lorryReceipt.toObject(),
+      billingParty: (lorryReceipt.billingParty as any)?.legalName,
+      vehicleId: lorryReceipt?.ownVehicle
+        ? (lorryReceipt.vehicleId as any)?.registration.plateNumber
+        : lorryReceipt.marketTruckDetails?.vehiclePlateNumber,
+    }));
+
+    handleSuccess(res, {
+      message: 'Lorry receipt fetched successfully',
+      data: {
+        data: newLorryReceipt,
+        count,
+      },
+    });
+  } catch (error) {
+    handleErrors(req, res, {
+      message: 'Error while fetching lorry receipt',
+      error,
+    });
+  }
+};
