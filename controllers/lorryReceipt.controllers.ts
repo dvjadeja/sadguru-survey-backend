@@ -454,19 +454,76 @@ export const printLorryReceipt = async (req: Request, res: Response) => {
   }
 };
 
+export const getOtherOrganizationNameFromLRByLedger = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const {
+      userId,
+      company: { name: ownCompany },
+    } = res.locals.user;
+    const { ledgerId }: any = req.query;
+
+    const otherOrganizations = await LorryReceipt.aggregate([
+      {
+        $match: {
+          ownOrganization: false,
+          invoiceStatus: 'PENDING',
+          billingParty: new db.Types.ObjectId(ledgerId),
+          createdBy: new db.Types.ObjectId(userId),
+        },
+      },
+      {
+        $group: {
+          _id: '$organizationDetails.companyName',
+        },
+      },
+    ]);
+
+    // Add a record in otherOrganization for response which containes the value of user company name it should be at the first position
+    otherOrganizations.unshift({ _id: ownCompany });
+
+    if (!otherOrganizations) throw new Error('No are other organizations');
+
+    // Convert it into array of label and value
+    otherOrganizations.map((organization: any) => {
+      organization.label = organization._id;
+      organization.value = organization._id;
+    });
+
+    handleSuccess(res, {
+      message: 'Other organizations fetched successfully',
+      data: otherOrganizations,
+    });
+  } catch (error) {
+    handleErrors(req, res, {
+      message: 'Error while fetching other organizations',
+      error,
+    });
+  }
+};
+
 export const getPendingLorryReceiptByLedger = async (
   req: Request,
   res: Response
 ) => {
   try {
     const { userId } = res.locals.user;
-    const { ledgerId }: any = req.query;
+    const { ledgerId, ownOrganization, otherOrganization }: any = req.query;
+    const boolOwnOrganization = ownOrganization === 'true' ? true : false;
+
+    console.log(ownOrganization, typeof ownOrganization, boolOwnOrganization);
 
     const lorryReceipts = await LorryReceipt.find(
       {
         createdBy: userId,
         billingParty: ledgerId,
         invoiceStatus: 'PENDING',
+        ownOrganization: boolOwnOrganization,
+        ...(boolOwnOrganization === false && {
+          'organizationDetails.companyName': otherOrganization,
+        }),
       },
       [
         'date',
@@ -498,6 +555,10 @@ export const getPendingLorryReceiptByLedger = async (
       createdBy: userId,
       billingParty: ledgerId,
       invoiceStatus: 'PENDING',
+      ownOrganization: boolOwnOrganization,
+      ...(boolOwnOrganization === false && {
+        'organizationDetails.companyName': otherOrganization,
+      }),
     });
 
     const newLorryReceipt = lorryReceipts.map((lorryReceipt) => ({

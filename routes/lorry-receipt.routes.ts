@@ -3,6 +3,7 @@ import { isAuthenticated } from '../middleware';
 import {
   createLorryReceipt,
   getLorryReceipt,
+  getOtherOrganizationNameFromLRByLedger,
   getPendingLorryReceiptByLedger,
   listLorryReceipt,
   printLorryReceipt,
@@ -20,6 +21,11 @@ router.get(
   '/pending-lr-by-ledger',
   isAuthenticated,
   getPendingLorryReceiptByLedger
+);
+router.get(
+  '/other-org-by-ledger',
+  isAuthenticated,
+  getOtherOrganizationNameFromLRByLedger
 );
 
 export default router;
