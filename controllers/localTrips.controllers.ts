@@ -567,8 +567,6 @@ export const validateExcelImport = async (req: Request, res: Response) => {
       }
     }
 
-    console.log('vehicleDieselTotals :: ', vehicleDieselTotals);
-
     // Check if available fuel is sufficient for each vehicle
     for (let vehicleId in vehicleDieselTotals) {
       const vehicle = await Vehicle.findById(vehicleId);
@@ -577,11 +575,6 @@ export const validateExcelImport = async (req: Request, res: Response) => {
         vehicle.fuel?.availableFuel &&
         vehicle.fuel.availableFuel < vehicleDieselTotals[vehicleId]
       ) {
-        console.log('Fuel Details :: ', {
-          vehicleId,
-          vehicleDieselTotals: vehicleDieselTotals[vehicleId],
-          availableFuel: vehicle.fuel.availableFuel,
-        });
         errors.push({
           row: 0, // Adjust as necessary to indicate a vehicle-level error
           errors: [

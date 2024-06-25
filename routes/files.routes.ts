@@ -80,6 +80,18 @@ router.post(
   uploadFile
 );
 
+router.post(
+  '/other-organization-logo',
+  upload.single('otherOrganization/logo'),
+  uploadFile
+);
+
+router.post(
+  '/other-organization-stamp',
+  upload.single('otherOrganization/stamp'),
+  uploadFile
+);
+
 router.delete('/delete', isAuthenticated, deleteFile);
 
 export default router;

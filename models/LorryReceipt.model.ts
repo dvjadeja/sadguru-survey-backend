@@ -61,13 +61,8 @@ const lorryReceiptSchema = new Schema(
       required: true,
     },
     organizationDetails: {
-      companyName: String,
-      gst: String,
-      pan: String,
-      address: String,
-      zipCode: String,
-      state: String,
-      country: String,
+      type: Schema.Types.ObjectId,
+      ref: 'OtherOrganization',
     },
     invoiceStatus: {
       type: String,

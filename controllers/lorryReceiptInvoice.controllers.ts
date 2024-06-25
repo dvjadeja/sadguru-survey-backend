@@ -65,7 +65,18 @@ export const getDataFromLrIds = async (req: Request, res: Response) => {
       _id: { $in: lorryReceiptIds },
       createdBy: userId,
       invoiceStatus: 'PENDING',
-    });
+    }).populate('organizationDetails', [
+      'companyName',
+      'gst',
+      'pan',
+      'address',
+      'country',
+      'state',
+      'zipCode',
+      'logo',
+      'stamp',
+      'bankDetails',
+    ]);
 
     if (lorryReceipts.length !== lorryReceiptIds.length)
       throw new Error('Lorry receipt(s) not found');
@@ -138,6 +149,119 @@ export const getDataFromLrIds = async (req: Request, res: Response) => {
   } catch (error) {
     handleErrors(req, res, {
       message: 'Error while fetching lorry receipt data',
+      error,
+    });
+  }
+};
+
+export const createLorryReceiptInvoice = async (
+  req: Request,
+  res: Response
+) => {
+  const lorryReceiptInvoiceValidator = z.object({
+    invoiceNo: z.string(),
+    ledgerId: z.string(),
+    invoiceDate: z.string(),
+    dueDate: z.string(),
+    lorryReceiptIds: z.array(z.string()),
+    ownOrganization: z.boolean(),
+    organizationDetails: z.string().optional(),
+    gstApplicable: z.boolean(),
+    gstPercentage: z.number().optional(),
+    gstType: z.enum(['SGST-CGST', 'IGST']).optional(),
+    gstAmount: z.number().optional(),
+    subTotal: z.number(),
+    totalAmount: z.number(),
+    remarks: z.string().optional(),
+  });
+
+  // Initiate transaction
+  const session = await db.startSession();
+
+  // Start transaction
+  session.startTransaction();
+
+  try {
+    lorryReceiptInvoiceValidator.parse(req.body);
+
+    const { userId } = res.locals.user;
+
+    const lorryReceiptInvoicePayload = req.body;
+
+    // Check if the same invoiceNo already exists
+    const existingInvoice = await LorryReceiptInvoice.findOne({
+      invoiceNo: lorryReceiptInvoicePayload.invoiceNo,
+      createdBy: userId,
+    });
+
+    if (existingInvoice) {
+      throw new Error('Invoice No already exists');
+    }
+
+    const lorryReceiptInvoice = new LorryReceiptInvoice({
+      ...lorryReceiptInvoicePayload,
+      createdBy: userId,
+    });
+
+    const newLorryReceiptInvoice = await lorryReceiptInvoice.save({
+      session: session,
+    });
+
+    if (!newLorryReceiptInvoice)
+      throw new Error('Lorry receipt invoice not created');
+
+    // Update the totalAmount & pendingAmount in the Ledger document
+    const ledger = await Ledger.findOneAndUpdate(
+      {
+        _id: lorryReceiptInvoicePayload.ledgerId,
+        createdBy: userId,
+      },
+      {
+        $inc: {
+          totalAmount: lorryReceiptInvoicePayload.totalAmount,
+          pendingAmount: lorryReceiptInvoicePayload.totalAmount,
+        },
+      },
+      {
+        session: session,
+      }
+    );
+
+    if (!ledger) throw new Error('Ledger not found');
+
+    // Update all the ledgers in the LorryReceipt to be GENERATED in invoiceStatus
+
+    const lorryReceipts = await LorryReceipt.find(
+      {
+        _id: { $in: lorryReceiptInvoicePayload.lorryReceiptIds },
+        createdBy: userId,
+      },
+      [],
+      { session: session }
+    );
+
+    if (!lorryReceipts) throw new Error('Lorry receipt not found');
+
+    for (const lorryReceipt of lorryReceipts) {
+      lorryReceipt.invoiceStatus = 'GENERATED';
+      await lorryReceipt.save({ session: session });
+    }
+
+    // Commit transaction
+    await session.commitTransaction();
+    session.endSession();
+
+    handleSuccess(res, {
+      message: 'Lorry receipt invoice created successfully',
+      data: newLorryReceiptInvoice,
+    });
+  } catch (error) {
+    // Rollback transaction
+    await session.abortTransaction();
+    session.endSession();
+
+    handleErrors(req, res, {
+      message: 'Error while creating lorry receipt invoice',
       error,
     });
   }

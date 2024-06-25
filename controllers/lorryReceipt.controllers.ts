@@ -2,53 +2,55 @@ import { Request, Response } from 'express';
 import { z } from 'zod';
 
 import db from '../setups/mongo';
-import { LorryReceipt, Vehicle } from '../models';
+import { LorryReceipt, OtherOrganization, Vehicle } from '../models';
 import { handleErrors, handleSuccess } from '../utils/response.utils';
 import { getStartAndEnd } from '../utils/utilities';
 
 export const createLorryReceipt = async (req: Request, res: Response) => {
-  const lorryReceiptValidator = z.object({
-    date: z.string(),
-    lorryReceiptId: z.string(),
-    vehicleId: z.string().optional(),
-    modeOfTrade: z.enum(['IMPORT', 'EXPORT']),
-    bookingNo: z.string().optional(),
-    containerNo: z.string().optional(),
-    lineSeal: z.string().optional(),
-    containerSize: z.string().optional(),
-    billingParty: z.string(),
-    rate: z.number().optional(),
-    detentionAmount: z.number().optional(),
-    from: z.string(),
-    to: z.string(),
-    diesel: z.number().optional(),
-    advance: z.number().optional(),
-    tollPlazaAmount: z.number().optional(),
-    adaniFee: z.number().optional(),
-    remarks: z.string().optional(),
-    ownVehicle: z.boolean(),
-    marketTruckDetails: z
-      .object({
-        companyName: z.string(),
-        marketRate: z.number(),
-        vehiclePlateNumber: z.string(),
-        driverName: z.string(),
-        driverPhone: z.string(),
-      })
-      .optional(),
-    ownOrganization: z.boolean(),
-    organizationDetails: z
-      .object({
-        companyName: z.string(),
-        gst: z.string(),
-        pan: z.string(),
-        address: z.string(),
-        state: z.string(),
-        zipCode: z.string(),
-        country: z.string(),
-      })
-      .optional(),
-  });
+  const lorryReceiptValidator = z
+    .object({
+      date: z.string(),
+      lorryReceiptId: z.string(),
+      vehicleId: z.string().optional(),
+      modeOfTrade: z.enum(['IMPORT', 'EXPORT']),
+      bookingNo: z.string().optional(),
+      containerNo: z.string().optional(),
+      lineSeal: z.string().optional(),
+      containerSize: z.string().optional(),
+      billingParty: z.string(),
+      rate: z.number().optional(),
+      detentionAmount: z.number().optional(),
+      from: z.string(),
+      to: z.string(),
+      diesel: z.number().optional(),
+      advance: z.number().optional(),
+      tollPlazaAmount: z.number().optional(),
+      adaniFee: z.number().optional(),
+      remarks: z.string().optional(),
+      ownVehicle: z.boolean(),
+      marketTruckDetails: z
+        .object({
+          companyName: z.string(),
+          marketRate: z.number(),
+          vehiclePlateNumber: z.string(),
+          driverName: z.string(),
+          driverPhone: z.string(),
+        })
+        .optional(),
+      ownOrganization: z.boolean(),
+      organizationDetails: z.string().optional(),
+    })
+    .superRefine(
+      ({ ownOrganization, organizationDetails }, refinementContext) => {
+        if (ownOrganization === false && !organizationDetails) {
+          return refinementContext.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'Please provide organizationDetails',
+            path: ['organizationDetails'],
+          });
+        }
+      }
+    );
 
   const session = await db.startSession();
 
@@ -237,7 +239,8 @@ export const getLorryReceipt = async (req: Request, res: Response) => {
       $and: [{ _id: id }, { createdBy: userId }],
     })
       .populate('billingParty')
-      .populate('vehicleId');
+      .populate('vehicleId')
+      .populate('organizationDetails');
 
     if (!lorryReceipt) throw new Error(`Lorry receipt with ${id} not found`);
 
@@ -254,49 +257,51 @@ export const getLorryReceipt = async (req: Request, res: Response) => {
 };
 
 export const updateLorryReceipt = async (req: Request, res: Response) => {
-  const lorryReceiptValidator = z.object({
-    lrId: z.string(),
-    date: z.string().optional(),
-    lorryReceiptId: z.string().optional(),
-    vehicleId: z.string().optional(),
-    modeOfTrade: z.enum(['IMPORT', 'EXPORT']),
-    bookingNo: z.string().optional(),
-    containerNo: z.string().optional(),
-    lineSeal: z.string().optional(),
-    containerSize: z.string().optional(),
-    billingParty: z.string().optional(),
-    rate: z.number().optional(),
-    detentionAmount: z.number().optional(),
-    from: z.string().optional(),
-    to: z.string().optional(),
-    diesel: z.number().optional(),
-    advance: z.number().optional(),
-    tollPlazaAmount: z.number().optional(),
-    adaniFee: z.number().optional(),
-    remarks: z.string().optional(),
-    ownVehicle: z.boolean().optional(),
-    marketTruckDetails: z
-      .object({
-        companyName: z.string().optional(),
-        marketRate: z.number().optional(),
-        vehiclePlateNumber: z.string().optional(),
-        driverName: z.string().optional(),
-        driverPhone: z.string().optional(),
-      })
-      .optional(),
-    ownOrganization: z.boolean().optional(),
-    organizationDetails: z
-      .object({
-        companyName: z.string().optional(),
-        gst: z.string().optional(),
-        pan: z.string().optional(),
-        address: z.string().optional(),
-        state: z.string().optional(),
-        zipCode: z.string().optional(),
-        country: z.string().optional(),
-      })
-      .optional(),
-  });
+  const lorryReceiptValidator = z
+    .object({
+      lrId: z.string(),
+      date: z.string().optional(),
+      lorryReceiptId: z.string().optional(),
+      vehicleId: z.string().optional(),
+      modeOfTrade: z.enum(['IMPORT', 'EXPORT']),
+      bookingNo: z.string().optional(),
+      containerNo: z.string().optional(),
+      lineSeal: z.string().optional(),
+      containerSize: z.string().optional(),
+      billingParty: z.string().optional(),
+      rate: z.number().optional(),
+      detentionAmount: z.number().optional(),
+      from: z.string().optional(),
+      to: z.string().optional(),
+      diesel: z.number().optional(),
+      advance: z.number().optional(),
+      tollPlazaAmount: z.number().optional(),
+      adaniFee: z.number().optional(),
+      remarks: z.string().optional(),
+      ownVehicle: z.boolean().optional(),
+      marketTruckDetails: z
+        .object({
+          companyName: z.string().optional(),
+          marketRate: z.number().optional(),
+          vehiclePlateNumber: z.string().optional(),
+          driverName: z.string().optional(),
+          driverPhone: z.string().optional(),
+        })
+        .optional(),
+      ownOrganization: z.boolean().optional(),
+      organizationDetails: z.string().optional(),
+    })
+    .superRefine(
+      ({ ownOrganization, organizationDetails }, refinementContext) => {
+        if (ownOrganization === false && !organizationDetails) {
+          return refinementContext.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'Please provide organizationDetails',
+            path: ['organizationDetails'],
+          });
+        }
+      }
+    );
 
   const session = await db.startSession();
 
@@ -438,7 +443,8 @@ export const printLorryReceipt = async (req: Request, res: Response) => {
             'phoneNumber.primary': 1,
           },
         },
-      });
+      })
+      .populate('organizationDetails');
 
     if (!lorryReceipts) throw new Error('Lorry receipt not found');
 
@@ -465,7 +471,7 @@ export const getOtherOrganizationNameFromLRByLedger = async (
     } = res.locals.user;
     const { ledgerId }: any = req.query;
 
-    const otherOrganizations = await LorryReceipt.aggregate([
+    const otherOrganizationsId = await LorryReceipt.aggregate([
       {
         $match: {
           ownOrganization: false,
@@ -476,25 +482,37 @@ export const getOtherOrganizationNameFromLRByLedger = async (
       },
       {
         $group: {
-          _id: '$organizationDetails.companyName',
+          _id: '$organizationDetails',
         },
       },
     ]);
 
-    // Add a record in otherOrganization for response which containes the value of user company name it should be at the first position
-    otherOrganizations.unshift({ _id: ownCompany });
+    // Fetch all other organizations from otherOrganizations
+    const otherOrganizations = await OtherOrganization.find({
+      _id: {
+        $in: otherOrganizationsId.map((organization: any) => organization._id),
+      },
+      createdBy: userId,
+    });
 
     if (!otherOrganizations) throw new Error('No are other organizations');
 
     // Convert it into array of label and value
-    otherOrganizations.map((organization: any) => {
-      organization.label = organization._id;
-      organization.value = organization._id;
+    const newOtherOrg = otherOrganizations.map((organization) => {
+      return {
+        label: organization.companyName,
+        value: organization._id.toString(),
+      };
+    });
+
+    newOtherOrg.unshift({
+      label: ownCompany,
+      value: ownCompany,
     });
 
     handleSuccess(res, {
       message: 'Other organizations fetched successfully',
-      data: otherOrganizations,
+      data: newOtherOrg,
     });
   } catch (error) {
     handleErrors(req, res, {
@@ -513,8 +531,6 @@ export const getPendingLorryReceiptByLedger = async (
     const { ledgerId, ownOrganization, otherOrganization }: any = req.query;
     const boolOwnOrganization = ownOrganization === 'true' ? true : false;
 
-    console.log(ownOrganization, typeof ownOrganization, boolOwnOrganization);
-
     const lorryReceipts = await LorryReceipt.find(
       {
         createdBy: userId,
@@ -522,7 +538,7 @@ export const getPendingLorryReceiptByLedger = async (
         invoiceStatus: 'PENDING',
         ownOrganization: boolOwnOrganization,
         ...(boolOwnOrganization === false && {
-          'organizationDetails.companyName': otherOrganization,
+          organizationDetails: otherOrganization,
         }),
       },
       [
@@ -546,7 +562,8 @@ export const getPendingLorryReceiptByLedger = async (
       }
     )
       .populate('billingParty', ['legalName'])
-      .populate('vehicleId', ['registration.plateNumber']);
+      .populate('vehicleId', ['registration.plateNumber'])
+      .populate('organizationDetails');
 
     if (!lorryReceipts) throw new Error('Lorry receipt not found');
 
@@ -557,7 +574,7 @@ export const getPendingLorryReceiptByLedger = async (
       invoiceStatus: 'PENDING',
       ownOrganization: boolOwnOrganization,
       ...(boolOwnOrganization === false && {
-        'organizationDetails.companyName': otherOrganization,
+        organizationDetails: otherOrganization,
       }),
     });
 

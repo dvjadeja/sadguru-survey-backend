@@ -44,7 +44,7 @@ const userSchema = new Schema(
       stamp: String,
       prefix: String,
       pan: String,
-      gst: String
+      gst: String,
     },
   },
   { timestamps: true }
