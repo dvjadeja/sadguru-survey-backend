@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@100;200;300;400;500;600;700;800;900&display=swap"
+        rel="stylesheet">
+
+    <title>Lorry Receipt Invoice</title>
+
+    <style>
+        @media print {
+            .myDiv {
+                break-inside: avoid;
+            }
+        }
+
+        * html,
+        body {
+            padding: 0;
+            margin: 0;
+            font-family: Verdana, Arial, Helvetica, sans-serif;
+            background-color: #fff;
+        }
+
+        .two-columns {
+            display: flex;
+            flex-direction: row;
+            background-color: rgb(24, 196, 67);
+        }
+
+        .column {
+            display: flex;
+            flex-direction: column;
+            padding: 1rem;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Lorry Receipt Invoice</h1>
+    <h2>Company Name: {{companyName}}</h2>
+</body>
+
+</html>

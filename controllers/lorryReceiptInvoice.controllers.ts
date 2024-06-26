@@ -1,8 +1,13 @@
 import { Request, Response } from 'express';
+
+import { z } from 'zod';
+import puppeteer from 'puppeteer';
+import { readFileSync } from 'fs';
+import hbs from 'handlebars';
+
 import { Ledger, LorryReceipt, LorryReceiptInvoice } from '../models';
 import { handleErrors, handleSuccess } from '../utils/response.utils';
 import db from '../setups/mongo';
-import { z } from 'zod';
 
 export const listLorryReceiptInvoices = async (req: Request, res: Response) => {
   try {
@@ -262,6 +267,58 @@ export const createLorryReceiptInvoice = async (
 
     handleErrors(req, res, {
       message: 'Error while creating lorry receipt invoice',
+      error,
+    });
+  }
+};
+
+export const printLorryReceiptInvoice = async (req: Request, res: Response) => {
+  try {
+    const { userId, company } = res.locals.user;
+    const html = readFileSync('./templates/invoice/lr/index.html', 'utf-8');
+
+    const template = hbs.compile(html);
+
+    const payloadData = {
+      companyName: company.name,
+    };
+
+    const htmlToSend = template(payloadData);
+
+    const browser = await puppeteer.launch({
+      headless: true,
+      args: [
+        '--no-sandbox',
+        '--headless',
+        '--disable-gpu',
+        '--disable-dev-shm-usage',
+      ],
+    });
+
+    const page = await browser.newPage();
+
+    await page.setContent(htmlToSend);
+
+    const pdf = await page.pdf({
+      format: 'A4',
+      printBackground: true,
+    });
+
+    await browser.close();
+
+    res.setHeader('Content-Type', 'application/pdf');
+
+    const buffer = Buffer.from(pdf.buffer, pdf.byteOffset, pdf.byteLength);
+
+    res.status(200).send(buffer);
+
+    // handleSuccess(res, {
+    //   message: 'Lorry receipt invoice printed successfully',
+    //   data: buffer,
+    // });
+  } catch (error) {
+    handleErrors(req, res, {
+      message: 'Error while printing lorry receipt invoice',
       error,
     });
   }
