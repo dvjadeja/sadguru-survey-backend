@@ -29,7 +29,7 @@ export const listLorryReceiptInvoices = async (req: Request, res: Response) => {
         skip: parseInt(page) * parseInt(limit),
         limit: parseInt(limit),
       }
-    ).populate('ledgerId', ['ledgerName']);
+    ).populate('ledgerId', ['legalName']);
 
     if (!lorryReceiptInvoices)
       throw new Error('Lorry receipt invoice not found');
