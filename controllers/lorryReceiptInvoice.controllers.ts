@@ -1,9 +1,9 @@
 import { Request, Response } from 'express';
 
 import { z } from 'zod';
-import puppeteer from 'puppeteer';
-import { readFileSync } from 'fs';
-import hbs from 'handlebars';
+// import puppeteer from 'puppeteer';
+// import { readFileSync } from 'fs';
+// import hbs from 'handlebars';
 
 import { Ledger, LorryReceipt, LorryReceiptInvoice } from '../models';
 import { handleErrors, handleSuccess } from '../utils/response.utils';
@@ -272,54 +272,54 @@ export const createLorryReceiptInvoice = async (
   }
 };
 
-export const printLorryReceiptInvoice = async (req: Request, res: Response) => {
-  try {
-    const { userId, company } = res.locals.user;
-    const html = readFileSync('./templates/invoice/lr/index.html', 'utf-8');
+// export const printLorryReceiptInvoice = async (req: Request, res: Response) => {
+//   try {
+//     const { userId, company } = res.locals.user;
+//     const html = readFileSync('./templates/invoice/lr/index.html', 'utf-8');
 
-    const template = hbs.compile(html);
+//     const template = hbs.compile(html);
 
-    const payloadData = {
-      companyName: company.name,
-    };
+//     const payloadData = {
+//       companyName: company.name,
+//     };
 
-    const htmlToSend = template(payloadData);
+//     const htmlToSend = template(payloadData);
 
-    const browser = await puppeteer.launch({
-      headless: true,
-      args: [
-        '--no-sandbox',
-        '--headless',
-        '--disable-gpu',
-        '--disable-dev-shm-usage',
-      ],
-    });
+//     const browser = await puppeteer.launch({
+//       headless: true,
+//       args: [
+//         '--no-sandbox',
+//         '--headless',
+//         '--disable-gpu',
+//         '--disable-dev-shm-usage',
+//       ],
+//     });
 
-    const page = await browser.newPage();
+//     const page = await browser.newPage();
 
-    await page.setContent(htmlToSend);
+//     await page.setContent(htmlToSend);
 
-    const pdf = await page.pdf({
-      format: 'A4',
-      printBackground: true,
-    });
+//     const pdf = await page.pdf({
+//       format: 'A4',
+//       printBackground: true,
+//     });
 
-    await browser.close();
+//     await browser.close();
 
-    res.setHeader('Content-Type', 'application/pdf');
+//     res.setHeader('Content-Type', 'application/pdf');
 
-    const buffer = Buffer.from(pdf.buffer, pdf.byteOffset, pdf.byteLength);
+//     const buffer = Buffer.from(pdf.buffer, pdf.byteOffset, pdf.byteLength);
 
-    res.status(200).send(buffer);
+//     res.status(200).send(buffer);
 
-    // handleSuccess(res, {
-    //   message: 'Lorry receipt invoice printed successfully',
-    //   data: buffer,
-    // });
-  } catch (error) {
-    handleErrors(req, res, {
-      message: 'Error while printing lorry receipt invoice',
-      error,
-    });
-  }
-};
+//     // handleSuccess(res, {
+//     //   message: 'Lorry receipt invoice printed successfully',
+//     //   data: buffer,
+//     // });
+//   } catch (error) {
+//     handleErrors(req, res, {
+//       message: 'Error while printing lorry receipt invoice',
+//       error,
+//     });
+//   }
+// };
