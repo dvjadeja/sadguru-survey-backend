@@ -188,6 +188,7 @@ export const listLorryReceipt = async (req: Request, res: Response) => {
         'invoiceStatus',
         'ownVehicle',
         'marketTruckDetails.vehiclePlateNumber',
+        'paymentStatus',
       ],
       {
         sort: {

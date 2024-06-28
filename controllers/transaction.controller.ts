@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { Maintenance, Transaction, Vendor } from '../models';
+import { Transaction, Vendor } from '../models';
 import { handleErrors, handleSuccess } from '../utils/response.utils';
 import { z } from 'zod';
 import db from '../setups/mongo';

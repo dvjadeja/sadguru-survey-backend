@@ -12,3 +12,4 @@ export { default as Ledger } from './Ledger.model';
 export { default as LocalTrip } from './LocalTrip.model';
 export { default as LorryReceiptInvoice } from './LorryReceiptInvoice.model';
 export { default as OtherOrganization } from './OtherOrganizations.model';
+export { default as LedgerTransaction } from './LedgerTransaction.model';

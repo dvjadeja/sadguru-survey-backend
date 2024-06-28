@@ -60,6 +60,11 @@ const lorryReceiptInvoiceSchema = new Schema(
       required: true,
     },
     remarks: String,
+    paymentStatus: {
+      type: String,
+      enum: ['UNPAID', 'PAID'],
+      default: 'UNPAID',
+    },
     createdBy: {
       type: Schema.Types.ObjectId,
       ref: 'User',
