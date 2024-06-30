@@ -18,8 +18,17 @@ const ledgerTransactionSchema = new Schema(
       refPath: 'invoiceType',
       required: true,
     },
-    amount: {
-      type: Schema.Types.Decimal128,
+    invoiceAmount: {
+      type: Number,
+      required: true,
+    },
+    tds: {
+      type: Number,
+      required: true,
+      default: 0,
+    },
+    amountAfterTds: {
+      type: Number,
       required: true,
     },
     paymentDate: {

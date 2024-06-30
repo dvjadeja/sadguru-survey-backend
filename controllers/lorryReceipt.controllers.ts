@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { z } from 'zod';
 
 import db from '../setups/mongo';
-import { LorryReceipt, OtherOrganization, Vehicle } from '../models';
+import { Driver, LorryReceipt, OtherOrganization, Vehicle } from '../models';
 import { handleErrors, handleSuccess } from '../utils/response.utils';
 import { getStartAndEnd } from '../utils/utilities';
 
@@ -99,6 +99,7 @@ export const createLorryReceipt = async (req: Request, res: Response) => {
     if (lorryReceiptPayload.ownVehicle === true) {
       const vehicle = await Vehicle.findOne({
         _id: lorryReceiptPayload.vehicleId,
+        createdBy: userId,
       });
 
       if (!vehicle) throw new Error('Vehicle not found');
@@ -120,31 +121,28 @@ export const createLorryReceipt = async (req: Request, res: Response) => {
 
         if (!updatedVehicle) throw new Error('Vehicle not updated');
       }
+
+      // Deduct Available fuel from Driver
+      const driver = await Driver.findOne({
+        assignedVehicle: lorryReceiptPayload.vehicleId,
+        createdBy: userId,
+      });
+
+      if (!driver) throw new Error('Driver not found');
+
+      if (driver?.availableFuel < lorryReceiptPayload.diesel)
+        throw new Error('Fuel not available');
+
+      const updatedDriver = await Driver.findOneAndUpdate(
+        { _id: driver._id },
+        {
+          availableFuel: driver.availableFuel - lorryReceiptPayload.diesel,
+        },
+        { new: true, session: session }
+      );
+
+      if (!updatedDriver) throw new Error('Driver not updated');
     }
-
-    /*
-        update the ledger.pendingAmount & ledger.totalAmount by adding the charges
-        from lorryReceiptPayload.rate + lorryReceiptPayload.detentionAmount +
-        lorryReceiptPayload.tollPlazaAmount + lorryReceiptPayload.adaniFee
-    */
-    // const totalCharges =
-    //   lorryReceiptPayload.rate +
-    //   lorryReceiptPayload.detentionAmount +
-    //   lorryReceiptPayload.tollPlazaAmount +
-    //   lorryReceiptPayload.adaniFee;
-
-    // const updatedLedger = await Ledger.findOneAndUpdate(
-    //   { _id: lorryReceiptPayload.billingParty },
-    //   {
-    //     $inc: {
-    //       pendingAmount: totalCharges,
-    //       totalAmount: totalCharges,
-    //     },
-    //   },
-    //   { new: true, session: session }
-    // );
-
-    // if (!updatedLedger) throw new Error('Ledger not updated');
 
     await session.commitTransaction();
     session.endSession();
@@ -375,6 +373,30 @@ export const updateLorryReceipt = async (req: Request, res: Response) => {
       );
 
       if (!updatedVehicle) throw new Error(`Vehicle with ${lrId} not found`);
+
+      // update the driver?.availableFuel
+      const driver = await Driver.findOne({
+        assignedVehicle: lorryReceipt?.vehicleId,
+        createdBy: userId,
+      });
+
+      if (!driver) throw new Error(`Driver with ${lrId} not found`);
+
+      const newFuelOfDriver = driver?.availableFuel! + lorryReceipt?.diesel!;
+
+      if (newFuelOfDriver < lorryReceiptReqPayload?.diesel)
+        throw new Error('Fuel not enough');
+
+      const calculatedDriverFuel =
+        newFuelOfDriver - lorryReceiptReqPayload?.diesel!;
+
+      const updatedDriver = await Driver.findOneAndUpdate(
+        { _id: driver?._id },
+        { availableFuel: calculatedDriverFuel },
+        { new: true, session: session }
+      );
+
+      if (!updatedDriver) throw new Error(`Driver with ${lrId} not found`);
     }
 
     await session.commitTransaction();
