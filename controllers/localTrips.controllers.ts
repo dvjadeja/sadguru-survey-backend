@@ -1,13 +1,22 @@
 import { Request, Response } from 'express';
 import xlxs from 'xlsx';
 
-import { Ledger, LocalTrip, Vehicle } from '../models';
+import { Driver, Ledger, LocalTrip, Vehicle } from '../models';
 import { handleErrors, handleSuccess } from '../utils/response.utils';
 import db from '../setups/mongo';
 import { z } from 'zod';
 import { excelDateToJSDate, isDateSerial } from '../utils/xlxs.utils';
+import { VEHICLE_STATUS } from '../constants';
 
 interface VehicleDieselTotals {
+  [key: string]: number;
+}
+
+interface DriverDieselTotals {
+  [key: string]: number;
+}
+
+interface DriverIncentivesTotals {
   [key: string]: number;
 }
 
@@ -198,6 +207,20 @@ export const createLocalTrip = async (req: Request, res: Response) => {
 
     if (!vehicle) throw new Error('Vehicle not found');
 
+    // Reduce the driver.availableFuel by diesel
+    const driver = await Driver.findOneAndUpdate(
+      { _id: vehicle?.assignedDriver, createdBy: userId },
+      {
+        $inc: {
+          availableFuel: -req.body.diesel,
+          incentive: req.body.driverIncentive,
+        },
+      },
+      { new: true, session: session }
+    );
+
+    if (!driver) throw new Error('Driver not found');
+
     if (registerLocalTrip) {
       // If all updates succeed, commit the transaction
       await session.commitTransaction();
@@ -286,8 +309,9 @@ export const updateLocalTrip = async (req: Request, res: Response) => {
 
     if (!updatedLocalTrip) throw new Error('Error While Updating Local Trip');
 
-    /*  Update Vehicle fuel.availableFuel by adding old fuel 
-        from old record of local trip diesel and then subtracting the new fuel
+    /*  
+      Update Vehicle fuel.availableFuel by adding old fuel 
+      from old record of local trip diesel and then subtracting the new fuel
     */
     if (req.body?.diesel && localTrip?.diesel !== req.body?.diesel) {
       const vehicle = await Vehicle.findOne({
@@ -299,6 +323,9 @@ export const updateLocalTrip = async (req: Request, res: Response) => {
       if (vehicle.fuel && vehicle.fuel.availableFuel) {
         const oldFuel = vehicle?.fuel?.availableFuel + localTrip.diesel;
         const newFuel = oldFuel - req.body?.diesel;
+
+        if (vehicle.fuel.availableFuel < newFuel)
+          throw new Error('Vehicle fuel is not enough');
 
         const updatedVehicle = await Vehicle.findOneAndUpdate(
           { _id: localTrip.vehicleId, createdBy: userId },
@@ -315,6 +342,61 @@ export const updateLocalTrip = async (req: Request, res: Response) => {
 
         if (!updatedVehicle) throw new Error('Error While Updating Vehicle');
       }
+
+      // Reduce the driver.availableFuel by diesel
+      const driver = await Driver.findOne({
+        assignedVehicle: localTrip.vehicleId,
+        createdBy: userId,
+      });
+
+      if (!driver) throw new Error('Driver not found');
+
+      const oldDriverAvailableFuel = driver?.availableFuel + localTrip.diesel;
+      const newDriverAvailableFuel = oldDriverAvailableFuel - req.body?.diesel;
+
+      if (driver?.availableFuel < newDriverAvailableFuel)
+        throw new Error('Driver fuel is not enough');
+
+      const updatedDriver = await Driver.findOneAndUpdate(
+        { _id: driver._id, createdBy: userId },
+        {
+          $set: {
+            availableFuel: newDriverAvailableFuel,
+          },
+        },
+        { new: true, session: session }
+      );
+
+      if (!updatedDriver) throw new Error('Error While Updating Driver Fuel');
+    }
+
+    // Update Driver incentive
+    if (
+      req.body?.driverIncentive &&
+      localTrip?.driverIncentive !== req.body?.driverIncentive
+    ) {
+      const driver = await Driver.findOne({
+        assignedVehicle: localTrip.vehicleId,
+        createdBy: userId,
+      });
+
+      if (!driver) throw new Error('Driver not found');
+
+      const oldDriverIncentive = driver?.incentive - localTrip.driverIncentive;
+      const newDriverIncentive = oldDriverIncentive + req.body?.driverIncentive;
+
+      const updatedDriver = await Driver.findOneAndUpdate(
+        { _id: driver._id, createdBy: userId },
+        {
+          $set: {
+            incentive: newDriverIncentive,
+          },
+        },
+        { new: true, session: session }
+      );
+
+      if (!updatedDriver)
+        throw new Error('Error While Updating Driver Incentive');
     }
 
     if (updatedLocalTrip) {
@@ -363,6 +445,8 @@ export const validateExcelImport = async (req: Request, res: Response) => {
     let errors: ValidationError[] = [];
     let validRows: RowData[] = [];
     let vehicleDieselTotals: VehicleDieselTotals = {}; // To store total diesel required for each vehicle
+    let driverDieselTotals: DriverDieselTotals = {}; // To store total diesel required for each driver
+    let driverIncentivesTotals: DriverIncentivesTotals = {}; // To store total incentives for each driver
 
     for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
       let row = rows[rowIndex];
@@ -509,6 +593,18 @@ export const validateExcelImport = async (req: Request, res: Response) => {
                 rowIndex + 2
               }`
             );
+          } else if (vehicle.currentStatus !== VEHICLE_STATUS.ACTIVE) {
+            rowErrors.push(
+              `Vehicle is not active for VEHICLE NO: ${value} at row ${
+                rowIndex + 2
+              }, please activate vehicle first`
+            );
+          } else if (!vehicle?.assignedDriver) {
+            rowErrors.push(
+              `Driver not Assigned for VEHICLE NO: ${value} at row ${
+                rowIndex + 2
+              }, please assign driver first`
+            );
           } else {
             rowData.vehicleId = vehicle._id.toString();
 
@@ -521,20 +617,28 @@ export const validateExcelImport = async (req: Request, res: Response) => {
               vehicleDieselTotals[rowData.vehicleId] += rowData.diesel;
             }
 
-            // Check if diesel amount is greater than availableFuel
-            // if (
-            //   rowData.diesel !== undefined &&
-            //   vehicle?.fuel?.availableFuel &&
-            //   rowData.diesel > vehicle.fuel.availableFuel
-            // ) {
-            //   rowErrors.push(
-            //     `Diesel amount (${
-            //       rowData.diesel
-            //     }) is greater than available fuel (${
-            //       vehicle.fuel.availableFuel
-            //     }) for VEHICLE NO: ${value} at row ${rowIndex + 2}`
-            //   );
-            // }
+            // Track total diesel required for the driver associated with this vehicle
+            if (vehicle.assignedDriver && rowData.diesel !== undefined) {
+              const driverId = vehicle.assignedDriver.toString();
+              if (!driverDieselTotals[driverId]) {
+                driverDieselTotals[driverId] = 0;
+              }
+
+              driverDieselTotals[driverId] += rowData.diesel;
+            }
+
+            // Track incentives for the driver
+            if (
+              vehicle.assignedDriver &&
+              rowData.driverIncentive !== undefined
+            ) {
+              const driverId = vehicle.assignedDriver.toString();
+              if (!driverIncentivesTotals[driverId]) {
+                driverIncentivesTotals[driverId] = 0;
+              }
+
+              driverIncentivesTotals[driverId] += rowData.driverIncentive;
+            }
           }
         } else if (schemaKey === 'billingParty') {
           const ledger = await Ledger.findOne({
@@ -584,6 +688,23 @@ export const validateExcelImport = async (req: Request, res: Response) => {
       }
     }
 
+    // Check if available fuel is sufficient for each driver
+    for (let driverId in driverDieselTotals) {
+      const driver = await Driver.findById(driverId);
+      if (
+        driver &&
+        driver.availableFuel &&
+        driver.availableFuel < driverDieselTotals[driverId]
+      ) {
+        errors.push({
+          row: 0, // Adjust as necessary to indicate a driver-level error
+          errors: [
+            `DRIVER ID: ${driver?.firstName} ${driver?.lastName} -> Total diesel required is (${driverDieselTotals[driverId]}L) is greater than available fuel (${driver.availableFuel}L)`,
+          ],
+        });
+      }
+    }
+
     if (errors.length > 0) {
       await session.abortTransaction();
       session.endSession();
@@ -614,6 +735,34 @@ export const validateExcelImport = async (req: Request, res: Response) => {
         { _id: vehicleId },
         {
           $inc: { 'fuel.availableFuel': -vehicleDieselTotals[vehicleId] },
+        },
+        {
+          new: true,
+          session,
+        }
+      );
+    }
+
+    // Update Driver.availableFuel using the driverDieselTotals
+    for (let driverId in driverDieselTotals) {
+      await Driver.findOneAndUpdate(
+        { _id: driverId },
+        {
+          $inc: { availableFuel: -driverDieselTotals[driverId] },
+        },
+        {
+          new: true,
+          session,
+        }
+      );
+    }
+
+    // Update Driver.incentive using the driverIncentivesTotals
+    for (let driverId in driverIncentivesTotals) {
+      await Driver.findOneAndUpdate(
+        { _id: driverId },
+        {
+          $inc: { incentive: driverIncentivesTotals[driverId] },
         },
         {
           new: true,

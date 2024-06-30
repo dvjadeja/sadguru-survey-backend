@@ -63,6 +63,10 @@ const driverSchema = new Schema(
     },
     aadharCardLink: String,
     licenseLink: String,
+    incentive: {
+      type: Number,
+      default: 0,
+    },
     createdBy: {
       type: Schema.Types.ObjectId,
       ref: 'User',
