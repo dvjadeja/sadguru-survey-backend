@@ -7,8 +7,16 @@ import { generateHash, generateToken, verifyHash } from '../utils/auth.utils';
 
 export const register = async (req: Request, res: Response) => {
   try {
-    const { firstName, lastName, role, email, password, phone, company } =
-      req.body;
+    const {
+      firstName,
+      lastName,
+      role,
+      email,
+      password,
+      phone,
+      company,
+      bankDetails,
+    } = req.body;
 
     if (!firstName) throw new Error('firstName is required');
     if (!lastName) throw new Error('lastName is required');
@@ -17,6 +25,7 @@ export const register = async (req: Request, res: Response) => {
     if (!password) throw new Error('password is required');
     if (!phone) throw new Error('phone is required');
     if (!company) throw new Error('company is required');
+    if (!bankDetails) throw new Error('bankDetails is required');
 
     const user = await Users.findOne({ email });
 
@@ -31,6 +40,7 @@ export const register = async (req: Request, res: Response) => {
       password: await generateHash(password),
       phone: phone,
       company: company,
+      bankDetails: bankDetails,
     });
 
     const registeredUser = await newUser.save();
@@ -101,6 +111,7 @@ export const login = async (req: Request, res: Response) => {
       email: user.email,
       phone: user.phone,
       company: user.company,
+      bankDetails: user.bankDetails,
     };
 
     handleSuccess(res, {

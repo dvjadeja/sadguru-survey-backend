@@ -46,6 +46,13 @@ const userSchema = new Schema(
       pan: String,
       gst: String,
     },
+    bankDetails: {
+      accountHolderName: String,
+      accountNumber: String,
+      bankName: String,
+      ifscCode: String,
+      branch: String,
+    },
   },
   { timestamps: true }
 );
