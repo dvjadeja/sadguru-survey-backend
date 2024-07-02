@@ -114,6 +114,7 @@ export const createLorryReceipt = async (req: Request, res: Response) => {
             fuel: {
               availableFuel:
                 vehicle.fuel.availableFuel - lorryReceiptPayload.diesel,
+              fuelCapacity: vehicle.fuel.fuelCapacity || 0,
             },
           },
           { new: true, session: session }
