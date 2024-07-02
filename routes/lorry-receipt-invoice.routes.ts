@@ -5,8 +5,9 @@ import { isAuthenticated } from '../middleware';
 import {
   createLorryReceiptInvoice,
   getDataFromLrIds,
+  getLorryReceiptInvoice,
   listLorryReceiptInvoices,
-  // printLorryReceiptInvoice,
+  listUnpaidLorryReceiptInvoices,
 } from '../controllers/lorryReceiptInvoice.controllers';
 
 const router = Router();
@@ -17,16 +18,8 @@ router.post('/lr-ids', isAuthenticated, getDataFromLrIds);
 
 router.post('/create', isAuthenticated, createLorryReceiptInvoice);
 
-// router.get('/print', isAuthenticated, printLorryReceiptInvoice);
+router.get('/list-unpaid', isAuthenticated, listUnpaidLorryReceiptInvoices);
 
-// const { join } = require('path');
-
-// /**
-//  * @type {import("puppeteer").Configuration}
-//  */
-// module.exports = {
-//     // Changes the cache location for Puppeteer.
-//     cacheDirectory: join(__dirname, '.cache', 'puppeteer'),
-// };
+router.get('/get-invoice-details', isAuthenticated, getLorryReceiptInvoice);
 
 export default router;

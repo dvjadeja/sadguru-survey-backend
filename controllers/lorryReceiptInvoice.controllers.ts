@@ -272,54 +272,61 @@ export const createLorryReceiptInvoice = async (
   }
 };
 
-// export const printLorryReceiptInvoice = async (req: Request, res: Response) => {
-//   try {
-//     const { userId, company } = res.locals.user;
-//     const html = readFileSync('./templates/invoice/lr/index.html', 'utf-8');
+export const listUnpaidLorryReceiptInvoices = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const { userId } = res.locals.user;
 
-//     const template = hbs.compile(html);
+    const lorryReceiptInvoices = await LorryReceiptInvoice.find({
+      paymentStatus: 'UNPAID',
+      createdBy: userId,
+    });
 
-//     const payloadData = {
-//       companyName: company.name,
-//     };
+    if (!lorryReceiptInvoices)
+      throw new Error('Lorry receipt invoices not found');
 
-//     const htmlToSend = template(payloadData);
+    const newLorryReceiptInvoices = lorryReceiptInvoices.map(
+      (lorryReceiptInvoice) => ({
+        value: lorryReceiptInvoice._id.toString(),
+        label: lorryReceiptInvoice.invoiceNo,
+      })
+    );
 
-//     const browser = await puppeteer.launch({
-//       headless: true,
-//       args: [
-//         '--no-sandbox',
-//         '--headless',
-//         '--disable-gpu',
-//         '--disable-dev-shm-usage',
-//       ],
-//     });
+    handleSuccess(res, {
+      message: 'Lorry receipt invoices fetched successfully',
+      data: newLorryReceiptInvoices,
+    });
+  } catch (error) {
+    handleErrors(req, res, {
+      message: 'Error while fetching lorry receipt invoices',
+      error,
+    });
+  }
+};
 
-//     const page = await browser.newPage();
+export const getLorryReceiptInvoice = async (req: Request, res: Response) => {
+  try {
+    const { userId } = res.locals.user;
+    const { lorryReceiptInvoiceId } = req.query;
 
-//     await page.setContent(htmlToSend);
+    const lorryReceiptInvoice = await LorryReceiptInvoice.findOne({
+      _id: lorryReceiptInvoiceId,
+      createdBy: userId,
+    }).populate('ledgerId', ['legalName']);
 
-//     const pdf = await page.pdf({
-//       format: 'A4',
-//       printBackground: true,
-//     });
+    if (!lorryReceiptInvoice)
+      throw new Error('Lorry receipt invoice not found');
 
-//     await browser.close();
-
-//     res.setHeader('Content-Type', 'application/pdf');
-
-//     const buffer = Buffer.from(pdf.buffer, pdf.byteOffset, pdf.byteLength);
-
-//     res.status(200).send(buffer);
-
-//     // handleSuccess(res, {
-//     //   message: 'Lorry receipt invoice printed successfully',
-//     //   data: buffer,
-//     // });
-//   } catch (error) {
-//     handleErrors(req, res, {
-//       message: 'Error while printing lorry receipt invoice',
-//       error,
-//     });
-//   }
-// };
+    handleSuccess(res, {
+      message: 'Lorry receipt invoice fetched successfully',
+      data: lorryReceiptInvoice,
+    });
+  } catch (error) {
+    handleErrors(req, res, {
+      message: 'Error while fetching lorry receipt invoice',
+      error,
+    });
+  }
+};
