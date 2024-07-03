@@ -219,3 +219,58 @@ export const listAllVendors = async (req: Request, res: Response) => {
     });
   }
 };
+
+export const printAllVendorDataForExcel = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const { userId } = res.locals.user;
+    const vendors = await Vendor.find(
+      { createdBy: userId },
+      ['name', 'totalAmount', 'pendingAmount', 'paidAmount'],
+      {
+        sort: { createdAt: -1 },
+      }
+    );
+
+    if (!vendors) throw new Error('No vendors found');
+
+    const totalPaidAmount = vendors
+      .map((vendor) => Number(vendor.paidAmount))
+      .reduce((a, b) => a + b, 0)
+      .toFixed(2);
+
+    const totalPendingAmount = vendors
+      .map((vendor) => Number(vendor.pendingAmount))
+      .reduce((a, b) => a + b, 0)
+      .toFixed(2);
+
+    const totalAmount = vendors
+      .map((vendor) => Number(vendor.totalAmount))
+      .reduce((a, b) => a + b, 0)
+      .toFixed(2);
+
+    const newVendors = vendors.map((vendor) => ({
+      name: vendor.name,
+      totalAmount: Number(vendor.totalAmount).toFixed(2),
+      pendingAmount: Number(vendor.pendingAmount).toFixed(2),
+      paidAmount: Number(vendor.paidAmount).toFixed(2),
+    }));
+
+    handleSuccess(res, {
+      message: 'Vendors Fetched Successfully',
+      data: {
+        data: newVendors,
+        totalPaidAmount,
+        totalPendingAmount,
+        totalAmount,
+      },
+    });
+  } catch (error) {
+    handleErrors(req, res, {
+      message: 'Error while fetching vendors',
+      error,
+    });
+  }
+};
