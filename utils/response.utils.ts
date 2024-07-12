@@ -24,6 +24,7 @@ export const handleSuccess = (res: Response, resObj: Res) => {
 
   console.log({
     responseId: res.locals.responseId,
+    username: res.locals.company.name || res.locals.firstName || 'Guest',
     method: res.req.method,
     url: res.req.originalUrl,
     body: res.req.body,
