@@ -4,6 +4,7 @@ import {
   createDriver,
   deleteDriver,
   getDriver,
+  listAllActiveDrivers,
   listDriver,
   updateDriver,
 } from '../controllers/driver.controllers';
@@ -15,5 +16,7 @@ router.get('/', isAuthenticated, getDriver);
 router.post('/create', isAuthenticated, createDriver);
 router.put('/update', isAuthenticated, updateDriver);
 router.delete('/delete', isAuthenticated, deleteDriver);
+
+router.get('/list-all-active', isAuthenticated, listAllActiveDrivers);
 
 export default router;

@@ -267,7 +267,6 @@ export const listUnassignedVehicles = async (req: Request, res: Response) => {
       {
         createdBy: userId,
         assignedDriver: null,
-        currentStatus: 'ACTIVE',
       },
       ['registration.plateNumber', 'fuel.availableFuel'],
       {

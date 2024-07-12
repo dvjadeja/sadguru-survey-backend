@@ -16,6 +16,8 @@ export const listDriver = async (req: Request, res: Response) => {
           $or: [
             { firstName: new RegExp(search, 'i') },
             { lastName: new RegExp(search, 'i') },
+            { licenseNumber: new RegExp(search, 'i') },
+            { adharCard: new RegExp(search, 'i') },
           ],
         }),
       },
@@ -25,6 +27,7 @@ export const listDriver = async (req: Request, res: Response) => {
         'licenseNumber',
         'phoneNumber',
         'assignedVehicle',
+        'status'
       ],
       {
         sort: {
@@ -156,6 +159,7 @@ export const createDriver = async (req: Request, res: Response) => {
 
     const newDriver = new Driver({
       ...driverPayload,
+      status: 'ACTIVE',
       createdBy: userId,
     });
 
@@ -230,6 +234,10 @@ export const updateDriver = async (req: Request, res: Response) => {
     licenseLink: z.string().optional(),
   });
 
+  const session = await db.startSession();
+
+  session.startTransaction();
+
   try {
     driverValidator.parse(req.body);
 
@@ -244,11 +252,37 @@ export const updateDriver = async (req: Request, res: Response) => {
 
     const updatedDriver = await Driver.findOneAndUpdate(
       { $and: [{ _id: driverPayload.driverId }, { createdBy: userId }] },
-      driverPayload,
-      { new: true }
+      {
+        ...driverPayload,
+        status: driverPayload?.assignedVehicle ? 'ACTIVE' : 'INACTIVE',
+      },
+      { new: true, session }
     );
 
+    if (driverPayload?.assignedVehicle) {
+      await Vehicle.findOneAndUpdate(
+        {
+          $and: [
+            { _id: driverPayload?.assignedVehicle },
+            { createdBy: userId },
+          ],
+        },
+        {
+          assignedDriver: driverPayload.driverId,
+          currentStatus: 'ACTIVE',
+        },
+        {
+          new: true,
+          session,
+        }
+      );
+    }
+
     if (updatedDriver) {
+      // If all updates succeed, commit the transaction
+      await session.commitTransaction();
+      session.endSession();
+
       handleSuccess(res, {
         message: 'Driver Updated Successfully',
         data: {
@@ -257,6 +291,8 @@ export const updateDriver = async (req: Request, res: Response) => {
       });
     }
   } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
     handleErrors(req, res, {
       message: 'Error while updating driver',
       error,
@@ -287,6 +323,36 @@ export const deleteDriver = async (req: Request, res: Response) => {
   } catch (error) {
     handleErrors(req, res, {
       message: 'Error while deleting driver',
+      error,
+    });
+  }
+};
+
+export const listAllActiveDrivers = async (req: Request, res: Response) => {
+  try {
+    const { userId } = res.locals.user;
+
+    const drivers = await Driver.find({
+      $and: [{ createdBy: userId }, { status: 'ACTIVE' }],
+    }).lean();
+
+    if (!drivers) throw new Error(`No active drivers found`);
+
+    // convert data into label of firstName and lastName and value of _id
+    const data = drivers.map((driver) => {
+      return {
+        value: driver._id,
+        label: `${driver.firstName} ${driver.lastName}`,
+      };
+    });
+
+    handleSuccess(res, {
+      message: 'Active Drivers fetched successfully',
+      data,
+    });
+  } catch (error) {
+    handleErrors(req, res, {
+      message: 'Error while fetching drivers',
       error,
     });
   }
