@@ -22,9 +22,15 @@ type ErrRes = {
 export const handleSuccess = (res: Response, resObj: Res) => {
   const { status, ...rest } = resObj;
 
+  const username = res.locals?.company
+    ? res.locals.company.name
+    : res?.locals?.firstName
+    ? res.locals.firstName
+    : 'Guest';
+
   console.log({
     responseId: res.locals.responseId,
-    username: res.locals.company.name || res.locals.firstName || 'Guest',
+    username: username,
     method: res.req.method,
     url: res.req.originalUrl,
     body: res.req.body,
