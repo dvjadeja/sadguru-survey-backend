@@ -22,8 +22,6 @@ type ErrRes = {
 export const handleSuccess = (res: Response, resObj: Res) => {
   const { status, ...rest } = resObj;
 
-  console.log('Response', res.locals);
-
   const username = res.locals?.user?.company
     ? res.locals?.user?.company?.name
     : res?.locals?.user?.firstName
