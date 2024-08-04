@@ -18,6 +18,7 @@ import localTripRoutes from './local-trip.routes';
 import lorryReceiptInvoiceRoutes from './lorry-receipt-invoice.routes';
 import otherOrganizationRoutes from './other-organization.routes';
 import driverFnfRoutes from './driver-fnf.routes';
+import driverSalaryRoutes from './driver-salary.routes';
 
 export const registerRoutes = (app: Express) => {
   app.use('/api/v1/auth', authRoutes);
@@ -38,4 +39,5 @@ export const registerRoutes = (app: Express) => {
   app.use('/api/v1/invoice/lorry-receipt', lorryReceiptInvoiceRoutes);
   app.use('/api/v1/other-organization', otherOrganizationRoutes);
   app.use('/api/v1/driver-fnf', driverFnfRoutes);
+  app.use('/api/v1/driver-salary', driverSalaryRoutes);
 };
