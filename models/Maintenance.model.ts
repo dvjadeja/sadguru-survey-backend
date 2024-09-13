@@ -5,7 +5,6 @@ const maintenanceSchema = new Schema(
     billNumber: {
       type: String,
       required: true,
-      unique: true,
     },
     billDate: {
       type: Date,
