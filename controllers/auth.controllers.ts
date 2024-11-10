@@ -85,6 +85,9 @@ export const login = async (req: Request, res: Response) => {
     if (!(await verifyHash(password, `${user.password}`)))
       throw new Error(`Incorrect password`);
 
+    // Check subscription status
+    const isSubscribed = user.checkSubscriptionStatus();
+
     // Get today's date
     var today = new Date();
 
@@ -112,6 +115,12 @@ export const login = async (req: Request, res: Response) => {
       phone: user.phone,
       company: user.company,
       bankDetails: user.bankDetails,
+      isSubscribed: isSubscribed,
+      trialStartDate: user.trialStartDate,
+      trialEndDate: user.trialEndDate,
+      subscriptionStartDate: user.subscriptionStartDate,
+      subscriptionEndDate: user.subscriptionEndDate,
+      subscriptionHistory: user.subscriptionHistory,
     };
 
     handleSuccess(res, {
