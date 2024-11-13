@@ -16,6 +16,13 @@ export const register = async (req: Request, res: Response) => {
       phone,
       company,
       bankDetails,
+      isSubscribed,
+      subscriptionStartDate,
+      subscriptionEndDate,
+      trialStartDate,
+      trialEndDate,
+      hasUsedFreeTrial,
+      subscriptionHistory,
     } = req.body;
 
     if (!firstName) throw new Error('firstName is required');
@@ -41,6 +48,13 @@ export const register = async (req: Request, res: Response) => {
       phone: phone,
       company: company,
       bankDetails: bankDetails,
+      isSubscribed: isSubscribed,
+      subscriptionStartDate: subscriptionStartDate,
+      subscriptionEndDate: subscriptionEndDate,
+      trialStartDate: trialStartDate,
+      trialEndDate: trialEndDate,
+      hasUsedFreeTrial: hasUsedFreeTrial,
+      subscriptionHistory: subscriptionHistory,
     });
 
     const registeredUser = await newUser.save();
