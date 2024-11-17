@@ -24,6 +24,10 @@ const maintenanceSchema = new Schema(
       type: String,
       required: true,
     },
+    remarks: {
+      type: String,
+      default: '',
+    },
     createdBy: {
       type: Schema.Types.ObjectId,
       ref: 'User',

@@ -6,7 +6,7 @@ import {
   listMaintenances,
   printMaintenances,
   updateMaintenance,
-} from '../controllers/maintenance.controllers';
+} from '../controllers/maintenance.controller';
 
 const router = Router();
 

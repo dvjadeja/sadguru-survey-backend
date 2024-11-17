@@ -84,6 +84,7 @@ export const createMaintenance = async (req: Request, res: Response) => {
     vendorId: z.string(),
     vehicleId: z.string(),
     billAmount: z.string(),
+    remarks: z.string().optional(),
   });
 
   const session = await db.startSession();
@@ -165,6 +166,7 @@ export const updateMaintenance = async (req: Request, res: Response) => {
     previousBillAmount: z.string().optional(),
     vendorId: z.string(),
     vehicleId: z.string().optional(),
+    remarks: z.string().optional(),
   });
 
   const session = await db.startSession();
