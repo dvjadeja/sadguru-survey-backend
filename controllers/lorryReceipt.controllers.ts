@@ -624,3 +624,35 @@ export const getPendingLorryReceiptByLedger = async (
     });
   }
 };
+
+export const updateManyLorryReceiptStatus = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const { userId } = res.locals.user;
+    const { newStatus, oldStatus }: any = req.body;
+
+    const lorryReceipt = await LorryReceipt.updateMany(
+      {
+        createdBy: userId,
+        invoiceStatus: oldStatus,
+      },
+      {
+        $set: { invoiceStatus: newStatus },
+      }
+    );
+
+    if (!lorryReceipt) throw new Error('Lorry receipt not found');
+
+    handleSuccess(res, {
+      message: 'Lorry receipt status updated successfully',
+      data: lorryReceipt,
+    });
+  } catch (error) {
+    handleErrors(req, res, {
+      message: 'Error while updating lorry receipt status',
+      error,
+    });
+  }
+};

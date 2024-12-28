@@ -8,6 +8,7 @@ import {
   listLorryReceipt,
   printLorryReceipt,
   updateLorryReceipt,
+  updateManyLorryReceiptStatus,
 } from '../controllers/lorryReceipt.controllers';
 
 const router = Router();
@@ -26,6 +27,12 @@ router.get(
   '/other-org-by-ledger',
   isAuthenticated,
   getOtherOrganizationNameFromLRByLedger
+);
+
+router.put(
+  '/update-many-status',
+  isAuthenticated,
+  updateManyLorryReceiptStatus
 );
 
 export default router;
