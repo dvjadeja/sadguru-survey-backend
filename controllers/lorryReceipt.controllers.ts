@@ -39,6 +39,7 @@ export const createLorryReceipt = async (req: Request, res: Response) => {
         .optional(),
       ownOrganization: z.boolean(),
       organizationDetails: z.string().optional(),
+      containerStatus: z.enum(['EMPTY', 'LOADED']),
     })
     .superRefine(
       ({ ownOrganization, organizationDetails }, refinementContext) => {
@@ -290,6 +291,7 @@ export const updateLorryReceipt = async (req: Request, res: Response) => {
         .optional(),
       ownOrganization: z.boolean().optional(),
       organizationDetails: z.string().optional(),
+      containerStatus: z.enum(['EMPTY', 'LOADED']),
     })
     .superRefine(
       ({ ownOrganization, organizationDetails }, refinementContext) => {

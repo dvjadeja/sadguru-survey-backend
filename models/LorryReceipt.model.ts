@@ -23,6 +23,12 @@ const lorryReceiptSchema = new Schema(
     containerNo: String,
     lineSeal: String,
     containerSize: String,
+    containerStatus: {
+      type: String,
+      enum: ['EMPTY', 'LOADED'],
+      required: true,
+      default: '',
+    },
     billingParty: {
       type: Schema.Types.ObjectId,
       ref: 'Ledger',
