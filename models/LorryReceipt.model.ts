@@ -16,7 +16,7 @@ const lorryReceiptSchema = new Schema(
     },
     modeOfTrade: {
       type: String,
-      enum: ['IMPORT', 'EXPORT'],
+      enum: ['IMPORT', 'EXPORT', 'EMPTY'],
       required: true,
     },
     bookingNo: String,

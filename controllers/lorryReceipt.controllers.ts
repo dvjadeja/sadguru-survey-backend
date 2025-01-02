@@ -12,7 +12,7 @@ export const createLorryReceipt = async (req: Request, res: Response) => {
       date: z.string(),
       lorryReceiptId: z.string(),
       vehicleId: z.string().optional(),
-      modeOfTrade: z.enum(['IMPORT', 'EXPORT']),
+      modeOfTrade: z.enum(['IMPORT', 'EXPORT', 'EMPTY']),
       bookingNo: z.string().optional(),
       containerNo: z.string().optional(),
       lineSeal: z.string().optional(),
@@ -39,7 +39,6 @@ export const createLorryReceipt = async (req: Request, res: Response) => {
         .optional(),
       ownOrganization: z.boolean(),
       organizationDetails: z.string().optional(),
-      containerStatus: z.enum(['EMPTY', 'LOADED']),
     })
     .superRefine(
       ({ ownOrganization, organizationDetails }, refinementContext) => {
@@ -82,6 +81,8 @@ export const createLorryReceipt = async (req: Request, res: Response) => {
     //   Create LR
     const newLorryReceipt = new LorryReceipt({
       ...lorryReceiptPayload,
+      containerStatus:
+        lorryReceiptPayload?.modeOfTrade === 'EMPTY' ? 'EMPTY' : 'LOADED',
       createdBy: userId,
     });
 
@@ -264,7 +265,7 @@ export const updateLorryReceipt = async (req: Request, res: Response) => {
       date: z.string().optional(),
       lorryReceiptId: z.string().optional(),
       vehicleId: z.string().optional(),
-      modeOfTrade: z.enum(['IMPORT', 'EXPORT']),
+      modeOfTrade: z.enum(['IMPORT', 'EXPORT', 'EMPTY']),
       bookingNo: z.string().optional(),
       containerNo: z.string().optional(),
       lineSeal: z.string().optional(),
@@ -291,7 +292,6 @@ export const updateLorryReceipt = async (req: Request, res: Response) => {
         .optional(),
       ownOrganization: z.boolean().optional(),
       organizationDetails: z.string().optional(),
-      containerStatus: z.enum(['EMPTY', 'LOADED']),
     })
     .superRefine(
       ({ ownOrganization, organizationDetails }, refinementContext) => {
@@ -343,7 +343,11 @@ export const updateLorryReceipt = async (req: Request, res: Response) => {
     // update Lorry receipt
     const updatedLorryReceipt = await LorryReceipt.findOneAndUpdate(
       { _id: lrId },
-      { ...lorryReceiptReqPayload },
+      {
+        ...lorryReceiptReqPayload,
+        containerStatus:
+          lorryReceiptReqPayload?.modeOfTrade === 'EMPTY' ? 'EMPTY' : 'LOADED',
+      },
       { new: true, session: session }
     );
 
