@@ -26,7 +26,6 @@ const lorryReceiptSchema = new Schema(
     containerStatus: {
       type: String,
       enum: ['EMPTY', 'LOADED'],
-      required: true,
       default: '',
     },
     billingParty: {
