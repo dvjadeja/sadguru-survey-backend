@@ -2,7 +2,13 @@ import { Request, Response } from 'express';
 import { z } from 'zod';
 
 import db from '../setups/mongo';
-import { Driver, LorryReceipt, OtherOrganization, Vehicle } from '../models';
+import {
+  Driver,
+  LorryReceipt,
+  LorryReceiptInvoice,
+  OtherOrganization,
+  Vehicle,
+} from '../models';
 import { handleErrors, handleSuccess } from '../utils/response.utils';
 import { getStartAndEnd } from '../utils/utilities';
 
@@ -654,6 +660,49 @@ export const updateManyLorryReceiptStatus = async (
     handleSuccess(res, {
       message: 'Lorry receipt status updated successfully',
       data: lorryReceipt,
+    });
+  } catch (error) {
+    handleErrors(req, res, {
+      message: 'Error while updating lorry receipt status',
+      error,
+    });
+  }
+};
+
+export const updateManyLRStatusByLRInvoiceId = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const { userId } = res.locals.user;
+    const { lorryReceiptInvoiceId, newStatus, oldStatus }: any = req.body;
+
+    const LRIds = await LorryReceiptInvoice.findOne(
+      {
+        _id: lorryReceiptInvoiceId,
+        createdBy: userId,
+      },
+      ['lorryReceiptIds']
+    );
+
+    if (!LRIds) throw new Error('Lorry receipt not found');
+
+    // Update the status of LRIds to newStatus
+    const lorryReceiptUpdated = await LorryReceipt.updateMany(
+      {
+        _id: { $in: LRIds.lorryReceiptIds },
+        createdBy: userId,
+        invoiceStatus: oldStatus,
+      },
+      {
+        $set: { invoiceStatus: newStatus },
+      }
+    );
+
+    if (!lorryReceiptUpdated) throw new Error('Lorry receipt not updated');
+
+    handleSuccess(res, {
+      message: 'Lorry receipt status updated successfully',
     });
   } catch (error) {
     handleErrors(req, res, {

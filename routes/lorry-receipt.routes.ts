@@ -9,6 +9,7 @@ import {
   printLorryReceipt,
   updateLorryReceipt,
   updateManyLorryReceiptStatus,
+  updateManyLRStatusByLRInvoiceId,
 } from '../controllers/lorryReceipt.controllers';
 
 const router = Router();
@@ -33,6 +34,12 @@ router.put(
   '/update-many-status',
   isAuthenticated,
   updateManyLorryReceiptStatus
+);
+
+router.put(
+  '/update-many-status-by-lrInvoice',
+  isAuthenticated,
+  updateManyLRStatusByLRInvoiceId
 );
 
 export default router;
