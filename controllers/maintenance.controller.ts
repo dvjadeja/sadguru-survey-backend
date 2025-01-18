@@ -328,6 +328,102 @@ export const updateMaintenance = async (req: Request, res: Response) => {
       ).toString();
 
       await newVendor.save({ session: session });
+    } else if (
+      maintenancePayload?.vendorId !== maintenance?.vendorId.toString() &&
+      maintenancePayload?.billAmount !== maintenancePayload?.previousBillAmount
+    ) {
+      // Decrement the Vendor pending amount and totalAmount from the Old Vendor Vendor Model
+      const oldVendor = await Vendor.findOne({
+        _id: maintenance?.vendorId,
+        createdBy: userId,
+      });
+
+      if (!oldVendor)
+        throw new Error(`Vendor with ${maintenance?.vendorId} not found`);
+
+      if (!oldVendor?.totalAmount) throw new Error('Invalid Total amount');
+      if (!oldVendor?.pendingAmount) throw new Error('Invalid Pending amount');
+
+      if (isNaN(parseFloat(maintenancePayload.previousBillAmount)))
+        throw new Error('Invalid bill amount');
+
+      if (
+        oldVendor?.totalAmount &&
+        !isNaN(parseFloat(maintenancePayload.billAmount)) &&
+        parseFloat(oldVendor?.totalAmount) <
+          parseFloat(maintenancePayload.billAmount)
+      ) {
+        throw new Error(
+          `Insufficient Total amount. Please add more amount to ${oldVendor?.name} vendor`
+        );
+      }
+
+      if (
+        oldVendor?.pendingAmount &&
+        !isNaN(parseFloat(maintenancePayload.billAmount)) &&
+        parseFloat(oldVendor?.pendingAmount) <
+          parseFloat(maintenancePayload.billAmount)
+      ) {
+        throw new Error(
+          `Insufficient Pending amount. Please add more amount to ${oldVendor?.name} vendor`
+        );
+      }
+
+      if (
+        oldVendor?.totalAmount &&
+        !isNaN(parseFloat(maintenancePayload.billAmount)) &&
+        parseFloat(oldVendor?.totalAmount) >=
+          parseFloat(maintenancePayload.billAmount)
+      ) {
+        // Decrement the Vendor totalAmount from the Old Vendor Vendor Model
+        oldVendor.totalAmount = (
+          parseFloat(oldVendor?.totalAmount) -
+          parseFloat(maintenancePayload.billAmount)
+        ).toString();
+      }
+
+      if (
+        oldVendor?.pendingAmount &&
+        !isNaN(parseFloat(maintenancePayload.billAmount)) &&
+        parseFloat(oldVendor?.pendingAmount) >=
+          parseFloat(maintenancePayload.billAmount)
+      ) {
+        // Decrement the Vendor pending amount from the Old Vendor Vendor Model
+        oldVendor.pendingAmount = (
+          parseFloat(oldVendor?.pendingAmount) -
+          parseFloat(maintenancePayload.billAmount)
+        ).toString();
+      }
+
+      await oldVendor.save({ session: session });
+
+      // Increment the newVendor totalAmount and pendingAmount into the maintenancePayload.vendorId
+      const newVendor = await Vendor.findOne({
+        _id: maintenancePayload.vendorId,
+        createdBy: userId,
+      });
+
+      if (!newVendor)
+        throw new Error(`Vendor with ${maintenancePayload.vendorId} not found`);
+
+      if (!newVendor?.totalAmount) throw new Error('Invalid Total amount');
+      if (!newVendor?.pendingAmount) throw new Error('Invalid Pending amount');
+
+      if (isNaN(parseFloat(maintenancePayload.billAmount)))
+        throw new Error('Invalid bill amount');
+
+      // Increment the newVendor totalAmount and pendingAmount from the New Vendor Vendor Model
+      newVendor.totalAmount = (
+        parseFloat(newVendor?.totalAmount) +
+        parseFloat(maintenancePayload.billAmount)
+      ).toString();
+
+      newVendor.pendingAmount = (
+        parseFloat(newVendor?.pendingAmount) +
+        parseFloat(maintenancePayload.billAmount)
+      ).toString();
+
+      await newVendor.save({ session: session });
     }
 
     const updatedMaintenance = await Maintenance.findOneAndUpdate(
