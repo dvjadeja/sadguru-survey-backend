@@ -235,7 +235,8 @@ export const updateMaintenance = async (req: Request, res: Response) => {
         throw new Error('Invalid bill amount');
       }
     } else if (
-      maintenancePayload?.vendorId !== maintenance?.vendorId.toString()
+      maintenancePayload?.vendorId !== maintenance?.vendorId.toString() &&
+      maintenancePayload?.billAmount === maintenancePayload?.previousBillAmount
     ) {
       // Decrement the Vendor pending amount and totalAmount from the Old Vendor Vendor Model
       const oldVendor = await Vendor.findOne({
@@ -332,7 +333,7 @@ export const updateMaintenance = async (req: Request, res: Response) => {
       maintenancePayload?.vendorId !== maintenance?.vendorId.toString() &&
       maintenancePayload?.billAmount !== maintenancePayload?.previousBillAmount
     ) {
-      // Decrement the Vendor pending amount and totalAmount from the Old Vendor Vendor Model
+      // Decrement the maintenance.previousBillAmount from the Vendor pending amount and totalAmount from the Old Vendor Vendor Model
       const oldVendor = await Vendor.findOne({
         _id: maintenance?.vendorId,
         createdBy: userId,
@@ -349,9 +350,9 @@ export const updateMaintenance = async (req: Request, res: Response) => {
 
       if (
         oldVendor?.totalAmount &&
-        !isNaN(parseFloat(maintenancePayload.billAmount)) &&
+        !isNaN(parseFloat(maintenancePayload.previousBillAmount)) &&
         parseFloat(oldVendor?.totalAmount) <
-          parseFloat(maintenancePayload.billAmount)
+          parseFloat(maintenancePayload.previousBillAmount)
       ) {
         throw new Error(
           `Insufficient Total amount. Please add more amount to ${oldVendor?.name} vendor`
@@ -360,9 +361,9 @@ export const updateMaintenance = async (req: Request, res: Response) => {
 
       if (
         oldVendor?.pendingAmount &&
-        !isNaN(parseFloat(maintenancePayload.billAmount)) &&
+        !isNaN(parseFloat(maintenancePayload.previousBillAmount)) &&
         parseFloat(oldVendor?.pendingAmount) <
-          parseFloat(maintenancePayload.billAmount)
+          parseFloat(maintenancePayload.previousBillAmount)
       ) {
         throw new Error(
           `Insufficient Pending amount. Please add more amount to ${oldVendor?.name} vendor`
@@ -371,27 +372,27 @@ export const updateMaintenance = async (req: Request, res: Response) => {
 
       if (
         oldVendor?.totalAmount &&
-        !isNaN(parseFloat(maintenancePayload.billAmount)) &&
+        !isNaN(parseFloat(maintenancePayload.previousBillAmount)) &&
         parseFloat(oldVendor?.totalAmount) >=
-          parseFloat(maintenancePayload.billAmount)
+          parseFloat(maintenancePayload.previousBillAmount)
       ) {
         // Decrement the Vendor totalAmount from the Old Vendor Vendor Model
         oldVendor.totalAmount = (
           parseFloat(oldVendor?.totalAmount) -
-          parseFloat(maintenancePayload.billAmount)
+          parseFloat(maintenancePayload.previousBillAmount)
         ).toString();
       }
 
       if (
         oldVendor?.pendingAmount &&
-        !isNaN(parseFloat(maintenancePayload.billAmount)) &&
+        !isNaN(parseFloat(maintenancePayload.previousBillAmount)) &&
         parseFloat(oldVendor?.pendingAmount) >=
-          parseFloat(maintenancePayload.billAmount)
+          parseFloat(maintenancePayload.previousBillAmount)
       ) {
         // Decrement the Vendor pending amount from the Old Vendor Vendor Model
         oldVendor.pendingAmount = (
           parseFloat(oldVendor?.pendingAmount) -
-          parseFloat(maintenancePayload.billAmount)
+          parseFloat(maintenancePayload.previousBillAmount)
         ).toString();
       }
 
