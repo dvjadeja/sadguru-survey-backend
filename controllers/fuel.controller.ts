@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { Decimal128 } from 'mongoose';
 import { Driver, Fuel, Users, Vehicle, Vendor } from '../models';
 import { handleErrors, handleSuccess } from '../utils/response.utils';
 import { z } from 'zod';
@@ -402,6 +403,117 @@ export const printFuel = async (req: Request, res: Response) => {
   } catch (error) {
     handleErrors(req, res, {
       message: 'Error while fetching Fuel',
+      error,
+    });
+  }
+};
+
+export const deleteFuel = async (req: Request, res: Response) => {
+  const deleteFuelValidaotr = z.object({
+    id: z.string(),
+  });
+
+  const session = await db.startSession();
+
+  // Begin a transaction
+  session.startTransaction();
+
+  try {
+    deleteFuelValidaotr.parse(req.body);
+
+    const { userId } = res.locals.user;
+    const { id } = req.body;
+
+    // find fuel
+    const fuel = await Fuel.findOne({
+      $and: [{ _id: id }, { createdBy: userId }],
+    });
+
+    if (!fuel) throw new Error(`Fuel not found`);
+
+    // find vendor
+    const vendor = await Vendor.findOne({
+      _id: fuel.vendorId,
+      createdBy: userId,
+    });
+
+    if (!vendor) throw new Error(`Vendor not found`);
+
+    // find vehicle
+    const vehicle = await Vehicle.findOne({
+      _id: fuel.vehicleId,
+      createdBy: userId,
+    });
+
+    if (!vehicle) throw new Error(`Vehicle not found`);
+
+    // find driver
+    const driver = await Driver.findOne({
+      _id: fuel.driverId,
+      createdBy: userId,
+    });
+
+    if (!driver) throw new Error(`Driver not found`);
+
+    if (fuel.totalAmount) {
+      // update vendor total amount and pending amount
+      vendor.totalAmount = (
+        parseFloat(vendor.totalAmount) - parseFloat(fuel.totalAmount.toString())
+      ).toString();
+      vendor.pendingAmount = (
+        parseFloat(vendor.pendingAmount) -
+        parseFloat(fuel.totalAmount.toString())
+      ).toString();
+
+      await vendor.save({ session });
+    }
+
+    // calculate total quantity in a fuel.expenses
+    let totalQuantity = 0;
+    for (let i = 0; i < fuel.expenses.length; i++) {
+      if (fuel.expenses[i].description.toLowerCase() === 'diesel') {
+        totalQuantity += parseFloat(fuel.expenses[i].quantity.toString());
+      }
+    }
+
+    if (
+      vehicle.fuel?.availableFuel &&
+      totalQuantity &&
+      vehicle.fuel.availableFuel >= totalQuantity
+    ) {
+      // update vehicle fuel
+      vehicle.fuel.availableFuel = vehicle.fuel.availableFuel - totalQuantity;
+
+      await vehicle.save({ session });
+    }
+
+    // update driver.availableFuel
+    if (
+      driver.availableFuel &&
+      totalQuantity &&
+      driver.availableFuel >= totalQuantity
+    ) {
+      driver.availableFuel = driver.availableFuel - totalQuantity;
+
+      await driver.save({ session });
+    }
+
+    // delete fuel
+    await Fuel.deleteOne({ _id: id }, { session });
+
+    // Commit the transaction
+    await session.commitTransaction();
+    session.endSession();
+
+    handleSuccess(res, {
+      message: 'Fuel deleted successfully',
+    });
+  } catch (error) {
+    // Abort the transaction
+    await session.abortTransaction();
+    session.endSession();
+    handleErrors(req, res, {
+      message: 'Error while deleting fuel',
       error,
     });
   }

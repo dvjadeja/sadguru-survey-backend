@@ -484,6 +484,7 @@ export const printMaintenances = async (req: Request, res: Response) => {
       'billNumber',
       'billDate',
       'billAmount',
+      'remarks'
     ])
       .populate('vehicleId', ['registration.plateNumber'])
       .populate('vendorId', ['name']);
