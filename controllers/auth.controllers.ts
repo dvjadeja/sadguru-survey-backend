@@ -1,9 +1,10 @@
-import { Request, Response } from 'express';
+import { Request, Response } from "express";
 
-import { Users } from '../models';
+import { Users } from "../models";
 
-import { handleErrors, handleSuccess } from '../utils/response.utils';
-import { generateHash, generateToken, verifyHash } from '../utils/auth.utils';
+import { handleErrors, handleSuccess } from "../utils/response.utils";
+import { generateHash, generateToken, verifyHash } from "../utils/auth.utils";
+import { z } from "zod";
 
 export const register = async (req: Request, res: Response) => {
   try {
@@ -25,14 +26,14 @@ export const register = async (req: Request, res: Response) => {
       subscriptionHistory,
     } = req.body;
 
-    if (!firstName) throw new Error('firstName is required');
-    if (!lastName) throw new Error('lastName is required');
-    if (!role) throw new Error('role is required');
-    if (!email) throw new Error('email is required');
-    if (!password) throw new Error('password is required');
-    if (!phone) throw new Error('phone is required');
-    if (!company) throw new Error('company is required');
-    if (!bankDetails) throw new Error('bankDetails is required');
+    if (!firstName) throw new Error("firstName is required");
+    if (!lastName) throw new Error("lastName is required");
+    if (!role) throw new Error("role is required");
+    if (!email) throw new Error("email is required");
+    if (!password) throw new Error("password is required");
+    if (!phone) throw new Error("phone is required");
+    if (!company) throw new Error("company is required");
+    if (!bankDetails) throw new Error("bankDetails is required");
 
     const user = await Users.findOne({ email });
 
@@ -67,7 +68,7 @@ export const register = async (req: Request, res: Response) => {
       });
 
       handleSuccess(res, {
-        message: 'User Created Successfully',
+        message: "User Created Successfully",
         data: {
           accessToken: token,
           user: registeredUser,
@@ -77,7 +78,7 @@ export const register = async (req: Request, res: Response) => {
   } catch (error) {
     handleErrors(req, res, {
       status: 500,
-      message: 'Error while creating user.',
+      message: "Error while creating user.",
       error,
     });
   }
@@ -87,8 +88,8 @@ export const login = async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body;
 
-    if (!email) throw new Error('email is required');
-    if (!password) throw new Error('password is required');
+    if (!email) throw new Error("email is required");
+    if (!password) throw new Error("password is required");
 
     const user = await Users.findOne({ email });
 
@@ -138,7 +139,7 @@ export const login = async (req: Request, res: Response) => {
     };
 
     handleSuccess(res, {
-      message: 'User Logged in Successfully',
+      message: "User Logged in Successfully",
       data: {
         accessToken: token,
         user: dataToSend,
@@ -147,7 +148,7 @@ export const login = async (req: Request, res: Response) => {
   } catch (error) {
     handleErrors(req, res, {
       status: 500,
-      message: 'Error while logged in user.',
+      message: "Error while logged in user.",
       error,
     });
   }
@@ -158,16 +159,16 @@ export const authMe = async (req: Request, res: Response) => {
     const { userId } = res.locals.user;
 
     const user = await Users.findById({ _id: userId });
-    if (!user) throw new Error('User not found');
+    if (!user) throw new Error("User not found");
 
     handleSuccess(res, {
-      message: 'User Authenticated Successfully',
+      message: "User Authenticated Successfully",
       data: user,
     });
   } catch (error) {
     handleErrors(req, res, {
       status: 500,
-      message: 'Error while Authenticating user.',
+      message: "Error while Authenticating user.",
       error,
     });
   }
@@ -182,10 +183,10 @@ export const updateUser = async (req: Request, res: Response) => {
       new: true,
     });
 
-    if (!edited) throw new Error('Error in Profile Update');
+    if (!edited) throw new Error("Error in Profile Update");
 
     handleSuccess(res, {
-      message: 'Profile Updated Successfully',
+      message: "Profile Updated Successfully",
       data: {
         updateUser: edited,
       },
@@ -193,7 +194,7 @@ export const updateUser = async (req: Request, res: Response) => {
   } catch (error) {
     handleErrors(req, res, {
       status: 500,
-      message: 'Error while updating user.',
+      message: "Error while updating user.",
       error,
     });
   }
@@ -202,13 +203,13 @@ export const updateUser = async (req: Request, res: Response) => {
 export const updatePassword = async (req: Request, res: Response) => {
   try {
     const { oldPassword, newPassword } = req.body;
-    if (!oldPassword) throw new Error('Old Password cannot be empty');
-    if (!newPassword) throw new Error('New Password cannot be empty.');
+    if (!oldPassword) throw new Error("Old Password cannot be empty");
+    if (!newPassword) throw new Error("New Password cannot be empty.");
 
     const { userId } = res.locals.user;
     const loggedUser = await Users.findById(userId);
     if (!loggedUser) {
-      throw new Error('Please login first');
+      throw new Error("Please login first");
     }
 
     if (!(await verifyHash(oldPassword, `${loggedUser.password}`)))
@@ -220,15 +221,15 @@ export const updatePassword = async (req: Request, res: Response) => {
       { password: newHashPassword },
       { new: true }
     );
-    if (!updatePassword) throw new Error('Error in change password');
+    if (!updatePassword) throw new Error("Error in change password");
 
     handleSuccess(res, {
-      message: 'Password Updated successfully',
+      message: "Password Updated successfully",
     });
   } catch (error) {
     handleErrors(req, res, {
       status: 500,
-      message: 'Error while updating password.',
+      message: "Error while updating password.",
       error,
     });
   }
@@ -240,19 +241,69 @@ export const getUserData = async (req: Request, res: Response) => {
 
     const user = await Users.findById({ _id: userId });
 
-    if (!user) throw new Error('User not found');
+    if (!user) throw new Error("User not found");
 
     // Exclude password from response
     const { password, ...userData } = user.toObject();
 
     handleSuccess(res, {
-      message: 'User Data Fetched Successfully',
+      message: "User Data Fetched Successfully",
       data: userData,
     });
   } catch (error) {
     handleErrors(req, res, {
       status: 500,
-      message: 'Error while fetching user data.',
+      message: "Error while fetching user data.",
+      error,
+    });
+  }
+};
+
+export const updateSubscription = async (req: Request, res: Response) => {
+  const subscriptionValidator = z.object({
+    subscriptionStartDate: z.string({
+      required_error: "Subscription start date is required",
+    }),
+    subscriptionEndDate: z.string({
+      required_error: "Subscription end date is required",
+    }),
+  });
+  try {
+    subscriptionValidator.parse(req.body);
+    const { userId } = res.locals.user;
+    const { subscriptionStartDate, subscriptionEndDate } = req.body;
+
+    const user = await Users.findById(userId);
+    if (!user) throw new Error("User not found");
+
+    const subscription = await Users.findOneAndUpdate(
+      {
+        _id: userId,
+      },
+      {
+        subscriptionStartDate,
+        subscriptionEndDate,
+        // append to subscriptionHistory
+        subscriptionHistory: [
+          ...(user.subscriptionHistory || []),
+          { subscriptionStartDate, subscriptionEndDate },
+        ],
+      },
+      {
+        new: true,
+      }
+    );
+
+    if (!subscription) throw new Error("Error in updating subscription");
+
+    handleSuccess(res, {
+      message: "Subscription Updated Successfully",
+      data: subscription,
+    });
+  } catch (error) {
+    handleErrors(req, res, {
+      status: 500,
+      message: "Error while updating subscription.",
       error,
     });
   }
