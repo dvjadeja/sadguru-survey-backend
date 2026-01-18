@@ -25,22 +25,25 @@ export const handleSuccess = (res: Response, resObj: Res) => {
   const username = res.locals?.user?.company
     ? res.locals?.user?.company?.name
     : res?.locals?.user?.firstName
-    ? res.locals?.user?.firstName
-    : 'Guest';
+      ? res.locals?.user?.firstName
+      : 'Guest';
 
-  console.log({
-    responseId: res.locals.responseId,
-    username: username,
-    method: res.req.method,
-    url: res.req.originalUrl,
-    body: res.req.body,
-    params: res.req.params,
-    query: res.req.query,
+  // Do not console log the /api/v1/auth/me endpoint
+  if (res.req.originalUrl !== '/api/v1/auth/me') {
+    console.log({
+      responseId: res.locals.responseId,
+      username: username,
+      method: res.req.method,
+      url: res.req.originalUrl,
+      body: res.req.body,
+      params: res.req.params,
+      query: res.req.query,
 
-    code: resObj.code || 'SUCCESS',
-    status: status || 200,
-    ...rest,
-  });
+      code: resObj.code || 'SUCCESS',
+      status: status || 200,
+      ...rest,
+    })
+  }
 
   https: return res.status(status || 200).json({
     code: resObj.code || 'SUCCESS',
