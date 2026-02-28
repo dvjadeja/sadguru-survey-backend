@@ -501,3 +501,153 @@ export const getLorryReceiptInvoiceForPDF = async (
     });
   }
 };
+
+export const getLorryReceiptAnnexureForPDF = async (
+  req: Request,
+  res: Response,
+) => {
+  try {
+    const { userId, company } = res.locals.user;
+    const { invoiceId } = req.query;
+
+    if (!invoiceId) throw new Error("Invoice ID is required");
+
+    // Find LorryReceiptInvoice by invoiceId
+    const lorryReceiptInvoice = await LorryReceiptInvoice.findOne(
+      {
+        _id: invoiceId,
+        createdBy: userId,
+      },
+      ["lorryReceiptIds", "ownOrganization", "organizationDetails"],
+    ).populate("organizationDetails", [
+      "companyName",
+      "address",
+      "state",
+      "zipCode",
+      "country",
+      "logo",
+      "stamp",
+    ]);
+
+    const lorryReceipts = await LorryReceipt.find(
+      {
+        _id: { $in: lorryReceiptInvoice?.lorryReceiptIds },
+        createdBy: userId,
+      },
+      [
+        "date",
+        "containerNo",
+        "containerSize",
+        "ownVehicle",
+        "vehicleId",
+        "marketTruckDetails",
+        "from",
+        "to",
+        "rate",
+        "detentionAmount",
+        "bookingNo",
+        "containerStatus",
+        "lorryReceiptId",
+        "modeOfTrade",
+      ],
+    ).populate("vehicleId", ["registration.plateNumber"]);
+
+    if (!lorryReceipts) throw new Error("Lorry receipt(s) not found");
+
+    const newLorryReceipts = lorryReceipts.map((lorryReceipt, index) => {
+      const srNo = `${index + 1}`;
+      const lrDate = constructDate(lorryReceipt.date);
+      const containerNo = lorryReceipt.containerNo;
+      const containerSize = lorryReceipt.containerSize;
+      const vehicleNo = lorryReceipt.ownVehicle
+        ? (lorryReceipt.vehicleId as any)?.registration.plateNumber
+        : lorryReceipt?.marketTruckDetails?.vehiclePlateNumber;
+      const from = lorryReceipt.from;
+      const to = lorryReceipt.to;
+      const rate = constructAmount(lorryReceipt.rate || 0);
+      const detentionAmount = constructAmount(
+        lorryReceipt.detentionAmount || 0,
+      );
+      const total = constructAmount(
+        (lorryReceipt.rate || 0) + (lorryReceipt.detentionAmount || 0),
+      );
+      const bookingNo = lorryReceipt.bookingNo;
+      const containerStatus = lorryReceipt.containerStatus
+        ? lorryReceipt.containerStatus
+        : lorryReceipt.modeOfTrade === "EMPTY"
+          ? "EMPTY"
+          : "LOADED";
+      const lorryReceiptId = lorryReceipt.lorryReceiptId;
+      const modeOfTrade = lorryReceipt.modeOfTrade;
+      const remarks = lorryReceipt.remarks;
+      const ownOrganization = lorryReceipt.ownOrganization;
+      const organizationDetails = lorryReceipt.organizationDetails;
+      const createdBy = lorryReceipt.createdBy;
+      const createdAt = lorryReceipt.createdAt;
+
+      return {
+        srNo: srNo || "",
+        lrDate: lrDate || "",
+        containerNo: containerNo || "",
+        containerSize: containerSize || "",
+        vehicleNo: vehicleNo || "",
+        from: from || "",
+        to: to || "",
+        rate: rate || "",
+        detentionAmount: detentionAmount || "",
+        total: total || "",
+        bookingNo: bookingNo || "-",
+        containerStatus: containerStatus || "-",
+        lorryReceiptId: lorryReceiptId || "",
+      };
+    });
+
+    const companyName = lorryReceiptInvoice?.ownOrganization
+      ? company.name
+      : (lorryReceiptInvoice?.organizationDetails as any)?.companyName;
+
+    const address = lorryReceiptInvoice?.ownOrganization
+      ? constructCompanyAddress(company)
+      : constructCompanyAddress(lorryReceiptInvoice?.organizationDetails);
+
+    const logo = lorryReceiptInvoice?.ownOrganization
+      ? company?.logo
+      : (lorryReceiptInvoice?.organizationDetails as any)?.logo;
+
+    const totalRateAmount =
+      lorryReceipts
+        .map((lr) => lr.rate)
+        .reduce((a, b) => (a || 0) + (b || 0), 0) || 0;
+
+    const totalDetentionAmount =
+      lorryReceipts
+        .map((lr) => lr.detentionAmount)
+        .reduce((a, b) => (a || 0) + (b || 0), 0) || 0;
+
+    const totalAmountOfLorryReceipts =
+      lorryReceipts
+        .map((lr) => (lr.rate || 0) + (lr.detentionAmount || 0))
+        .reduce((a, b) => (a || 0) + (b || 0), 0) || 0;
+
+    const payloadData = {
+      companyName: companyName || "",
+      address: address || "",
+      logo: logo || "",
+      content: newLorryReceipts,
+      totalRateAmount: constructAmount(totalRateAmount) || "0",
+      totalDetentionAmount: constructAmount(totalDetentionAmount) || "0",
+      totalAmountOfLorryReceipts:
+        constructAmount(totalAmountOfLorryReceipts) || "0",
+    };
+
+    handleSuccess(res, {
+      message: "Lorry receipt annexure fetched successfully",
+      data: payloadData,
+    });
+  } catch (error) {
+    handleErrors(req, res, {
+      message: "Error while fetching lorry receipt annexure for PDF",
+      error,
+    });
+  }
+};

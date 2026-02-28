@@ -5,6 +5,7 @@ import { isAuthenticated } from "../middleware";
 import {
   createLorryReceiptInvoice,
   getDataFromLrIds,
+  getLorryReceiptAnnexureForPDF,
   getLorryReceiptInvoice,
   getLorryReceiptInvoiceForPDF,
   listLorryReceiptInvoices,
@@ -27,6 +28,12 @@ router.get(
   "/get-invoice-details-for-pdf",
   isAuthenticated,
   getLorryReceiptInvoiceForPDF,
+);
+
+router.get(
+  "/get-annexure-details-for-pdf",
+  isAuthenticated,
+  getLorryReceiptAnnexureForPDF,
 );
 
 export default router;
