@@ -6,6 +6,7 @@ import {
   getFuel,
   listFuel,
   printFuel,
+  updateFuel,
 } from '../controllers/fuel.controller';
 
 const router = Router();
@@ -15,5 +16,6 @@ router.get('/', isAuthenticated, getFuel);
 router.post('/create', isAuthenticated, createFuel);
 router.get('/print', isAuthenticated, printFuel);
 router.delete('/delete', isAuthenticated, deleteFuel);
+router.put('/update/:fuelId', isAuthenticated, updateFuel);
 
 export default router;
