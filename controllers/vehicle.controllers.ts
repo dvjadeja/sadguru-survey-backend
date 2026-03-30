@@ -1,8 +1,8 @@
-import { Request, Response } from 'express';
-import { Vehicle } from '../models';
-import { handleErrors, handleSuccess } from '../utils/response.utils';
-import { z } from 'zod';
-import { VEHICLE_STATUS } from '../constants';
+import { Request, Response } from "express";
+import { Vehicle } from "../models";
+import { handleErrors, handleSuccess } from "../utils/response.utils";
+import { z } from "zod";
+import { VEHICLE_STATUS } from "../constants";
 
 export const listVehicle = async (req: Request, res: Response) => {
   try {
@@ -14,20 +14,20 @@ export const listVehicle = async (req: Request, res: Response) => {
         createdBy: userId,
         ...(search && {
           $or: [
-            { 'registration.plateNumber': new RegExp(search, 'i') },
-            { make: new RegExp(search, 'i') },
-            { model: new RegExp(search, 'i') },
+            { "registration.plateNumber": new RegExp(search, "i") },
+            { make: new RegExp(search, "i") },
+            { model: new RegExp(search, "i") },
           ],
         }),
       },
       [
-        'make',
-        'model',
-        'registrationDate',
-        'fuel.availableFuel',
-        'registration.plateNumber',
-        'currentStatus',
-        'assignedDriver',
+        "make",
+        "model",
+        "registrationDate",
+        "fuel.availableFuel",
+        "registration.plateNumber",
+        "currentStatus",
+        "assignedDriver",
       ],
       {
         sort: {
@@ -35,24 +35,24 @@ export const listVehicle = async (req: Request, res: Response) => {
         },
         skip: parseInt(page) * parseInt(limit),
         limit: parseInt(limit),
-      }
+      },
     )
-      .populate('assignedDriver', ['firstName', 'lastName'])
+      .populate("assignedDriver", ["firstName", "lastName"])
       .exec();
 
     const vehiclesCount = await Vehicle.find({
       createdBy: userId,
       ...(search && {
         $or: [
-          { 'registration.plateNumber': new RegExp(search, 'i') },
-          { make: new RegExp(search, 'i') },
-          { model: new RegExp(search, 'i') },
+          { "registration.plateNumber": new RegExp(search, "i") },
+          { make: new RegExp(search, "i") },
+          { model: new RegExp(search, "i") },
         ],
       }),
     }).countDocuments();
 
     handleSuccess(res, {
-      message: 'Vehicle List Fetched Successfully',
+      message: "Vehicle List Fetched Successfully",
       data: {
         data: vehicles,
         count: vehiclesCount,
@@ -60,7 +60,7 @@ export const listVehicle = async (req: Request, res: Response) => {
     });
   } catch (error) {
     handleErrors(req, res, {
-      message: 'Error while fetching vehicles',
+      message: "Error while fetching vehicles",
       error,
     });
   }
@@ -78,14 +78,14 @@ export const getVehicle = async (req: Request, res: Response) => {
     if (!vehicle) throw new Error(`Vehicle with ${id} not found`);
 
     handleSuccess(res, {
-      message: 'Vehicle Fetched Successfully',
+      message: "Vehicle Fetched Successfully",
       data: {
         data: vehicle,
       },
     });
   } catch (error) {
     handleErrors(req, res, {
-      message: 'Error while fetching vehicle',
+      message: "Error while fetching vehicle",
       error,
     });
   }
@@ -144,7 +144,7 @@ export const createVehicle = async (req: Request, res: Response) => {
 
     if (vehicle)
       throw new Error(
-        `Vehicle with ${vehiclePayload.registration.plateNumber} already exists`
+        `Vehicle with ${vehiclePayload.registration.plateNumber} already exists`,
       );
 
     const newVehicle = new Vehicle({ ...vehiclePayload, createdBy: userId });
@@ -153,7 +153,7 @@ export const createVehicle = async (req: Request, res: Response) => {
 
     if (registeredVehicle) {
       handleSuccess(res, {
-        message: 'Vehicle Created Successfully',
+        message: "Vehicle Created Successfully",
         data: {
           data: registeredVehicle,
         },
@@ -161,7 +161,7 @@ export const createVehicle = async (req: Request, res: Response) => {
     }
   } catch (error) {
     handleErrors(req, res, {
-      message: 'Error while creating vehicle',
+      message: "Error while creating vehicle",
       error,
     });
   }
@@ -215,17 +215,17 @@ export const updateVehicle = async (req: Request, res: Response) => {
     const edited = await Vehicle.findOneAndUpdate(
       { $and: [{ _id: vehicleId }, { createdBy: userId }] },
       vehiclePayload,
-      { new: true }
+      { new: true },
     );
 
     if (!edited) throw new Error(`Error while updating vehicle`);
 
     handleSuccess(res, {
-      message: 'Vehicle Updated Successfully',
+      message: "Vehicle Updated Successfully",
     });
   } catch (error) {
     handleErrors(req, res, {
-      message: 'Error while updating vehicle',
+      message: "Error while updating vehicle",
       error,
     });
   }
@@ -248,12 +248,12 @@ export const deleteVehicle = async (req: Request, res: Response) => {
 
     if (deleted) {
       handleSuccess(res, {
-        message: 'Vehicle Deleted Successfully',
+        message: "Vehicle Deleted Successfully",
       });
     }
   } catch (error) {
     handleErrors(req, res, {
-      message: 'Error while deleting vehicle',
+      message: "Error while deleting vehicle",
       error,
     });
   }
@@ -268,10 +268,10 @@ export const listUnassignedVehicles = async (req: Request, res: Response) => {
         createdBy: userId,
         assignedDriver: null,
       },
-      ['registration.plateNumber', 'fuel.availableFuel'],
+      ["registration.plateNumber", "fuel.availableFuel"],
       {
         sort: { createdAt: -1 },
-      }
+      },
     );
 
     const newVehicles = vehicles.map((vehicle) => ({
@@ -281,14 +281,14 @@ export const listUnassignedVehicles = async (req: Request, res: Response) => {
     }));
 
     handleSuccess(res, {
-      message: 'Vehicle List Fetched Successfully',
+      message: "Vehicle List Fetched Successfully",
       data: {
         data: newVehicles,
       },
     });
   } catch (error) {
     handleErrors(req, res, {
-      message: 'Error while fetching vehicles',
+      message: "Error while fetching vehicles",
       error,
     });
   }
@@ -303,12 +303,12 @@ export const listAssignedVehicles = async (req: Request, res: Response) => {
       {
         createdBy: userId,
         assignedDriver: { $ne: null },
-        currentStatus: 'ACTIVE',
+        currentStatus: "ACTIVE",
       },
-      ['registration.plateNumber'],
+      ["registration.plateNumber"],
       {
         sort: { createdAt: -1 },
-      }
+      },
     );
 
     const newVehicles = vehicles.map((vehicle) => ({
@@ -317,14 +317,14 @@ export const listAssignedVehicles = async (req: Request, res: Response) => {
     }));
 
     handleSuccess(res, {
-      message: 'Vehicle List Fetched Successfully',
+      message: "Vehicle List Fetched Successfully",
       data: {
         data: newVehicles,
       },
     });
   } catch (error) {
     handleErrors(req, res, {
-      message: 'Error while fetching vehicles',
+      message: "Error while fetching vehicles",
       error,
     });
   }
@@ -339,10 +339,10 @@ export const listAllVehicles = async (req: Request, res: Response) => {
       {
         createdBy: userId,
       },
-      ['registration.plateNumber'],
+      ["registration.plateNumber"],
       {
         sort: { createdAt: -1 },
-      }
+      },
     );
 
     const newVehicles = vehicles.map((vehicle) => ({
@@ -351,14 +351,53 @@ export const listAllVehicles = async (req: Request, res: Response) => {
     }));
 
     handleSuccess(res, {
-      message: 'Vehicle List Fetched Successfully',
+      message: "Vehicle List Fetched Successfully",
       data: {
         data: newVehicles,
       },
     });
   } catch (error) {
     handleErrors(req, res, {
-      message: 'Error while fetching vehicles',
+      message: "Error while fetching vehicles",
+      error,
+    });
+  }
+};
+
+export const validateVehicleFuel = async (req: Request, res: Response) => {
+  const validateVehicleFuelValidator = z.object({
+    vehicleId: z.string(),
+    fuel: z.number(),
+  });
+  try {
+    const { userId } = res.locals.user;
+    const { vehicleId, fuel } = validateVehicleFuelValidator.parse(req.body);
+
+    const vehicle = await Vehicle.findOne(
+      {
+        $and: [{ _id: vehicleId }, { createdBy: userId }],
+      },
+      ["fuel.availableFuel"],
+    );
+
+    if (!vehicle) throw new Error(`Vehicle not found`);
+
+    if (!vehicle?.fuel?.availableFuel)
+      throw new Error(`Vehicle fuel is not valid`);
+
+    if (vehicle.fuel?.availableFuel && vehicle.fuel?.availableFuel <= 0)
+      throw new Error(`Vehicle fuel is not valid`);
+
+    if (fuel > vehicle.fuel.availableFuel)
+      throw new Error(`Fuel is not enough`);
+
+    handleSuccess(res, {
+      message: "Fuel is validated successfully",
+      data: vehicle,
+    });
+  } catch (error) {
+    handleErrors(req, res, {
+      message: "Error while validating vehicle fuel",
       error,
     });
   }

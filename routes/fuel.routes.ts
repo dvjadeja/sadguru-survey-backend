@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { isAuthenticated } from '../middleware';
 import {
+  addDiesel,
   createFuel,
   deleteFuel,
   getFuel,
@@ -17,5 +18,6 @@ router.post('/create', isAuthenticated, createFuel);
 router.get('/print', isAuthenticated, printFuel);
 router.delete('/delete', isAuthenticated, deleteFuel);
 router.put('/update/:fuelId', isAuthenticated, updateFuel);
+router.post('/add-diesel', isAuthenticated, addDiesel);
 
 export default router;

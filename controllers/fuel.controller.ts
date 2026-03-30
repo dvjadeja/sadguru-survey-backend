@@ -746,3 +746,124 @@ export const deleteFuel = async (req: Request, res: Response) => {
     });
   }
 };
+
+export const addDiesel = async (req: Request, res: Response) => {
+  const addDieselValidator = z.object({
+    vendorId: z.string(),
+    vehicleId: z.string(),
+    diesel: z.number(),
+    rate: z.number(),
+    amount: z.number(),
+    date: z.string(),
+  });
+
+  const session = await db.startSession();
+
+  session.startTransaction();
+
+  try {
+    const { userId } = res.locals.user;
+    const { vendorId, vehicleId, diesel, rate, amount, date } =
+      addDieselValidator.parse(req.body);
+
+    const user = await Users.findOne({ _id: userId });
+
+    if (!user) throw new Error(`User not found`);
+
+    const vehicle = await Vehicle.findOne({
+      _id: vehicleId,
+      createdBy: userId,
+    });
+
+    if (!vehicle) throw new Error(`Vehicle not found`);
+
+    if (!vehicle.assignedDriver)
+      throw new Error(`Please select a vehicle with driver assigned`);
+
+    const driver = await Driver.findOne({
+      _id: vehicle.assignedDriver,
+      createdBy: userId,
+    });
+
+    if (!driver) throw new Error(`Driver not found`);
+
+    const vendor = await Vendor.findOne({
+      _id: vendorId,
+      createdBy: userId,
+    });
+
+    if (!vendor) throw new Error(`Vendor not found`);
+
+    const fuelCount = await Fuel.countDocuments({ createdBy: userId });
+
+    const fuelPayload = {
+      receiptId: `${user?.company?.prefix}/fuel/${fuelCount + 1}`,
+      date,
+      vehicleId,
+      driverId: vehicle.assignedDriver,
+      vendorId,
+      expenses: [
+        {
+          description: "Diesel",
+          quantity: diesel,
+          rate,
+          amount,
+        },
+      ],
+      totalAmount: amount,
+    };
+
+    const newFuel = new Fuel(fuelPayload);
+    const registeredFuel = await newFuel.save({ session: session });
+
+    if (!registeredFuel) throw new Error(`Fuel not created`);
+
+    // update vendor total amount and pending amount
+    if (!isNaN(parseFloat(amount.toString()))) {
+      vendor.totalAmount = (
+        parseFloat(vendor.totalAmount) + parseFloat(amount.toString())
+      ).toString();
+      vendor.pendingAmount = (
+        parseFloat(vendor.pendingAmount) + parseFloat(amount.toString())
+      ).toString();
+
+      await vendor.save({ session });
+    } else {
+      throw new Error(`Invalid amount`);
+    }
+
+    // update vehicle fuel
+    const updatedVehicle = await Vehicle.findOneAndUpdate(
+      { _id: vehicleId, createdBy: userId },
+      { $inc: { "fuel.availableFuel": diesel } },
+      { new: true, session },
+    );
+
+    if (!updatedVehicle) throw new Error(`Vehicle not found`);
+
+    // update driver available fuel
+    const updatedDriver = await Driver.findOneAndUpdate(
+      { _id: driver.id, createdBy: userId },
+      { $inc: { availableFuel: diesel } },
+      { new: true, session },
+    );
+
+    if (!updatedDriver) throw new Error(`Driver not found`);
+
+    // Commit the transaction
+    await session.commitTransaction();
+    session.endSession();
+
+    handleSuccess(res, {
+      message: "Diesel added successfully",
+      data: registeredFuel,
+    });
+  } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+    handleErrors(req, res, {
+      message: "Error while adding diesel",
+      error,
+    });
+  }
+};
