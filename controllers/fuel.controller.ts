@@ -811,6 +811,7 @@ export const addDiesel = async (req: Request, res: Response) => {
         },
       ],
       totalAmount: amount,
+      createdBy: userId,
     };
 
     const newFuel = new Fuel(fuelPayload);
