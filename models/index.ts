@@ -15,3 +15,4 @@ export { default as OtherOrganization } from './OtherOrganizations.model';
 export { default as LedgerTransaction } from './LedgerTransaction.model';
 export { default as DriverFNF } from './DriverFNF.model';
 export { default as DriverSalary } from './DriverSalary.model';
+export { default as MarketTruckFuel } from './MarketTruckFuel.model';

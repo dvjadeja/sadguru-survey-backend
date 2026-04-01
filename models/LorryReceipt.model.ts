@@ -59,6 +59,14 @@ const lorryReceiptSchema = new Schema(
       driverName: String,
       driverPhone: String,
     },
+    marketFuelProvidedByUs: {
+      type: Boolean,
+      default: false,
+    },
+    marketTruckFuelId: {
+      type: Schema.Types.ObjectId,
+      ref: 'MarketTruckFuel',
+    },
     ownOrganization: {
       type: Boolean,
       default: true,

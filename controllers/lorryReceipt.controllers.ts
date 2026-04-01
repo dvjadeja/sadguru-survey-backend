@@ -1,16 +1,48 @@
-import { Request, Response } from 'express';
-import { z } from 'zod';
+import { Request, Response } from "express";
+import { z } from "zod";
 
-import db from '../setups/mongo';
+import db from "../setups/mongo";
 import {
   Driver,
   LorryReceipt,
   LorryReceiptInvoice,
+  MarketTruckFuel,
   OtherOrganization,
+  Vendor,
   Vehicle,
-} from '../models';
-import { handleErrors, handleSuccess } from '../utils/response.utils';
-import { getStartAndEnd } from '../utils/utilities';
+} from "../models";
+import { handleErrors, handleSuccess } from "../utils/response.utils";
+import { getStartAndEnd, toNumber } from "../utils/utilities";
+
+const parseAmount = (value: unknown) => parseFloat(value?.toString() || "0");
+
+const applyVendorAmountDelta = async ({
+  vendorId,
+  amountDelta,
+  userId,
+  session,
+}: {
+  vendorId: string;
+  amountDelta: number;
+  userId: string;
+  session: any;
+}) => {
+  const vendor = await Vendor.findOne({
+    _id: vendorId,
+    createdBy: userId,
+  }).session(session);
+
+  if (!vendor) throw new Error("Vendor not found");
+
+  vendor.totalAmount = (
+    parseAmount(vendor.totalAmount) + amountDelta
+  ).toString();
+  vendor.pendingAmount = (
+    parseAmount(vendor.pendingAmount) + amountDelta
+  ).toString();
+
+  await vendor.save({ session });
+};
 
 export const createLorryReceipt = async (req: Request, res: Response) => {
   const lorryReceiptValidator = z
@@ -18,7 +50,7 @@ export const createLorryReceipt = async (req: Request, res: Response) => {
       date: z.string(),
       lorryReceiptId: z.string(),
       vehicleId: z.string().optional(),
-      modeOfTrade: z.enum(['IMPORT', 'EXPORT', 'EMPTY']),
+      modeOfTrade: z.enum(["IMPORT", "EXPORT", "EMPTY"]),
       bookingNo: z.string().optional(),
       containerNo: z.string().optional(),
       lineSeal: z.string().optional(),
@@ -39,23 +71,62 @@ export const createLorryReceipt = async (req: Request, res: Response) => {
           companyName: z.string(),
           marketRate: z.number(),
           vehiclePlateNumber: z.string(),
-          driverName: z.string(),
-          driverPhone: z.string(),
+          driverName: z.string().optional(),
+          driverPhone: z.string().optional(),
+        })
+        .optional(),
+      marketFuelProvidedByUs: z.boolean().optional(),
+      marketTruckFuel: z
+        .object({
+          vendorId: z.string(),
+          date: z.string(),
+          quantity: z.number(),
+          rate: z.number(),
         })
         .optional(),
       ownOrganization: z.boolean(),
       organizationDetails: z.string().optional(),
     })
     .superRefine(
-      ({ ownOrganization, organizationDetails }, refinementContext) => {
+      (
+        {
+          ownOrganization,
+          organizationDetails,
+          ownVehicle,
+          marketTruckDetails,
+          marketFuelProvidedByUs,
+          marketTruckFuel,
+        },
+        refinementContext,
+      ) => {
         if (ownOrganization === false && !organizationDetails) {
           return refinementContext.addIssue({
             code: z.ZodIssueCode.custom,
-            message: 'Please provide organizationDetails',
-            path: ['organizationDetails'],
+            message: "Please provide organizationDetails",
+            path: ["organizationDetails"],
           });
         }
-      }
+
+        if (ownVehicle === false && !marketTruckDetails) {
+          return refinementContext.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Please provide marketTruckDetails",
+            path: ["marketTruckDetails"],
+          });
+        }
+
+        if (
+          ownVehicle === false &&
+          marketFuelProvidedByUs === true &&
+          !marketTruckFuel
+        ) {
+          return refinementContext.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Please provide marketTruckFuel details",
+            path: ["marketTruckFuel"],
+          });
+        }
+      },
     );
 
   const session = await db.startSession();
@@ -64,10 +135,13 @@ export const createLorryReceipt = async (req: Request, res: Response) => {
   session.startTransaction();
 
   try {
-    lorryReceiptValidator.parse(req.body);
-
     const { userId } = res.locals.user;
-    const lorryReceiptPayload = req.body;
+    const lorryReceiptPayload = lorryReceiptValidator.parse(req.body);
+    const { marketTruckFuel, ...lorryReceiptPayloadWithoutMarketFuel } =
+      lorryReceiptPayload;
+    const shouldTrackMarketFuel =
+      lorryReceiptPayloadWithoutMarketFuel.ownVehicle === false &&
+      lorryReceiptPayloadWithoutMarketFuel.marketFuelProvidedByUs === true;
 
     // Find Lorry receipt with same lorryReceiptId
     const lorryReceipt = await LorryReceipt.findOne({
@@ -81,14 +155,19 @@ export const createLorryReceipt = async (req: Request, res: Response) => {
 
     if (lorryReceipt)
       throw new Error(
-        `Lorry receipt with ${lorryReceiptPayload.lorryReceiptId} already exists`
+        `Lorry receipt with ${lorryReceiptPayload.lorryReceiptId} already exists`,
       );
 
     //   Create LR
     const newLorryReceipt = new LorryReceipt({
-      ...lorryReceiptPayload,
+      ...lorryReceiptPayloadWithoutMarketFuel,
+      marketFuelProvidedByUs:
+        lorryReceiptPayloadWithoutMarketFuel.ownVehicle === true
+          ? false
+          : lorryReceiptPayloadWithoutMarketFuel.marketFuelProvidedByUs ||
+            false,
       containerStatus:
-        lorryReceiptPayload?.modeOfTrade === 'EMPTY' ? 'EMPTY' : 'LOADED',
+        lorryReceiptPayload?.modeOfTrade === "EMPTY" ? "EMPTY" : "LOADED",
       createdBy: userId,
     });
 
@@ -96,7 +175,58 @@ export const createLorryReceipt = async (req: Request, res: Response) => {
       session: session,
     });
 
-    if (!registeredLorryReceipt) throw new Error('Lorry receipt not created');
+    if (!registeredLorryReceipt) throw new Error("Lorry receipt not created");
+
+    if (shouldTrackMarketFuel && marketTruckFuel) {
+      const vendor = await Vendor.findOne({
+        _id: marketTruckFuel.vendorId,
+        createdBy: userId,
+      }).session(session);
+
+      if (!vendor) throw new Error("Vendor not found");
+
+      const parsedQuantity = parseFloat(marketTruckFuel.quantity.toString());
+      const parsedRate = parseFloat(marketTruckFuel.rate.toString());
+
+      if (
+        isNaN(parsedQuantity) ||
+        isNaN(parsedRate) ||
+        parsedQuantity <= 0 ||
+        parsedRate <= 0
+      ) {
+        throw new Error("Invalid market truck fuel quantity or rate");
+      }
+
+      const totalAmount = parsedQuantity * parsedRate;
+
+      const marketFuel = new MarketTruckFuel({
+        lorryReceiptId: registeredLorryReceipt._id,
+        vendorId: marketTruckFuel.vendorId,
+        date: marketTruckFuel.date,
+        quantity: new db.Types.Decimal128(parsedQuantity.toString()),
+        rate: new db.Types.Decimal128(parsedRate.toString()),
+        totalAmount: new db.Types.Decimal128(totalAmount.toString()),
+        createdBy: userId,
+      });
+
+      const registeredMarketFuel = await marketFuel.save({ session });
+
+      if (!registeredMarketFuel)
+        throw new Error("Market truck fuel record not created");
+
+      await applyVendorAmountDelta({
+        vendorId: marketTruckFuel.vendorId,
+        amountDelta: totalAmount,
+        userId,
+        session,
+      });
+
+      await LorryReceipt.findOneAndUpdate(
+        { _id: registeredLorryReceipt._id, createdBy: userId },
+        { marketTruckFuelId: registeredMarketFuel._id },
+        { new: true, session },
+      );
+    }
 
     /*
         check that lorryReceiptPayload.ownVehicle is true and lorryReceiptPayload.fuel is lesser than the fuel.available
@@ -110,25 +240,25 @@ export const createLorryReceipt = async (req: Request, res: Response) => {
         createdBy: userId,
       });
 
-      if (!vehicle) throw new Error('Vehicle not found');
+      if (!vehicle) throw new Error("Vehicle not found");
 
       if (vehicle?.fuel?.availableFuel) {
-        if (vehicle.fuel.availableFuel < lorryReceiptPayload.diesel)
-          throw new Error('Fuel not available');
+        if (vehicle.fuel.availableFuel < lorryReceiptPayload.diesel!)
+          throw new Error("Fuel not available");
 
         const updatedVehicle = await Vehicle.findOneAndUpdate(
           { _id: lorryReceiptPayload.vehicleId },
           {
             fuel: {
               availableFuel:
-                vehicle.fuel.availableFuel - lorryReceiptPayload.diesel,
+                vehicle.fuel.availableFuel - lorryReceiptPayload.diesel!,
               fuelCapacity: vehicle.fuel.fuelCapacity || 0,
             },
           },
-          { new: true, session: session }
+          { new: true, session: session },
         );
 
-        if (!updatedVehicle) throw new Error('Vehicle not updated');
+        if (!updatedVehicle) throw new Error("Vehicle not updated");
       }
 
       // Deduct Available fuel from Driver
@@ -137,34 +267,34 @@ export const createLorryReceipt = async (req: Request, res: Response) => {
         createdBy: userId,
       });
 
-      if (!driver) throw new Error('Driver not found');
+      if (!driver) throw new Error("Driver not found");
 
-      if (driver?.availableFuel < lorryReceiptPayload.diesel)
-        throw new Error('Fuel not available');
+      if (driver?.availableFuel < lorryReceiptPayload.diesel!)
+        throw new Error("Fuel not available");
 
       const updatedDriver = await Driver.findOneAndUpdate(
         { _id: driver._id },
         {
-          availableFuel: driver.availableFuel - lorryReceiptPayload.diesel,
+          availableFuel: driver.availableFuel - lorryReceiptPayload.diesel!,
         },
-        { new: true, session: session }
+        { new: true, session: session },
       );
 
-      if (!updatedDriver) throw new Error('Driver not updated');
+      if (!updatedDriver) throw new Error("Driver not updated");
     }
 
     await session.commitTransaction();
     session.endSession();
 
     handleSuccess(res, {
-      message: 'Lorry receipt created successfully',
+      message: "Lorry receipt created successfully",
       data: registeredLorryReceipt,
     });
   } catch (error) {
     await session.abortTransaction();
     session.endSession();
     handleErrors(req, res, {
-      message: 'Error while creating lorry receipt',
+      message: "Error while creating lorry receipt",
       error,
     });
   }
@@ -179,23 +309,24 @@ export const listLorryReceipt = async (req: Request, res: Response) => {
       {
         createdBy: userId,
         ...(search && {
-          $or: [{ lorryReceiptId: new RegExp(search, 'i') }],
+          $or: [{ lorryReceiptId: new RegExp(search, "i") }],
         }),
       },
       [
-        'date',
-        'lorryReceiptId',
-        'bookingNo',
-        'from',
-        'to',
-        'containerNo',
-        'containerSize',
-        'rate',
-        'detentionAmount',
-        'invoiceStatus',
-        'ownVehicle',
-        'marketTruckDetails.vehiclePlateNumber',
-        'paymentStatus',
+        "date",
+        "lorryReceiptId",
+        "bookingNo",
+        "from",
+        "to",
+        "containerNo",
+        "containerSize",
+        "rate",
+        "detentionAmount",
+        "invoiceStatus",
+        "ownVehicle",
+        "marketFuelProvidedByUs",
+        "marketTruckDetails.vehiclePlateNumber",
+        "paymentStatus",
       ],
       {
         sort: {
@@ -203,17 +334,17 @@ export const listLorryReceipt = async (req: Request, res: Response) => {
         },
         skip: parseInt(page) * parseInt(limit),
         limit: parseInt(limit),
-      }
+      },
     )
-      .populate('billingParty', ['legalName'])
-      .populate('vehicleId', ['registration.plateNumber']);
+      .populate("billingParty", ["legalName"])
+      .populate("vehicleId", ["registration.plateNumber"]);
 
-    if (!LR) throw new Error('Lorry receipt not found');
+    if (!LR) throw new Error("Lorry receipt not found");
 
     const LRCount = await LorryReceipt.find({
       createdBy: userId,
       ...(search && {
-        $or: [{ lorryReceiptId: new RegExp(search, 'i') }],
+        $or: [{ lorryReceiptId: new RegExp(search, "i") }],
       }),
     }).countDocuments();
 
@@ -224,7 +355,7 @@ export const listLorryReceipt = async (req: Request, res: Response) => {
     }));
 
     handleSuccess(res, {
-      message: 'Lorry Receipt List Fetched Successfully',
+      message: "Lorry Receipt List Fetched Successfully",
       data: {
         data: newLorryReceipt,
         count: LRCount,
@@ -232,7 +363,7 @@ export const listLorryReceipt = async (req: Request, res: Response) => {
     });
   } catch (error) {
     handleErrors(req, res, {
-      message: 'Error while fetching lorry receipt',
+      message: "Error while fetching lorry receipt",
       error,
     });
   }
@@ -246,19 +377,50 @@ export const getLorryReceipt = async (req: Request, res: Response) => {
     const lorryReceipt = await LorryReceipt.findOne({
       $and: [{ _id: id }, { createdBy: userId }],
     })
-      .populate('billingParty')
-      .populate('vehicleId')
-      .populate('organizationDetails');
+      .populate("billingParty")
+      .populate("vehicleId")
+      .populate("organizationDetails")
+      .populate({
+        path: "marketTruckFuelId",
+        populate: {
+          path: "vendorId",
+          select: "name",
+        },
+      });
 
     if (!lorryReceipt) throw new Error(`Lorry receipt with ${id} not found`);
 
+    const marketTruckFuel = await MarketTruckFuel.findOne({
+      _id: lorryReceipt.marketTruckFuelId,
+      createdBy: userId,
+    }).populate("vendorId", ["name"]);
+
+    if (!marketTruckFuel) throw new Error("Market truck fuel not found");
+
+    const marketTruckFuelData = marketTruckFuel.toObject();
+
+    // Decimal128 to Number
+    const quantity = toNumber(marketTruckFuelData.quantity);
+    const rate = toNumber(marketTruckFuelData.rate);
+    const totalAmount = toNumber(marketTruckFuelData.totalAmount);
+
+    const responseData = {
+      ...lorryReceipt.toObject(),
+      marketTruckFuelId: {
+        ...marketTruckFuelData,
+        quantity: quantity,
+        rate: rate,
+        totalAmount: totalAmount,
+      },
+    };
+
     handleSuccess(res, {
-      message: 'Lorry receipt fetched successfully',
-      data: lorryReceipt,
+      message: "Lorry receipt fetched successfully",
+      data: responseData,
     });
   } catch (error) {
     handleErrors(req, res, {
-      message: 'Error while fetching lorry receipt',
+      message: "Error while fetching lorry receipt",
       error,
     });
   }
@@ -271,7 +433,7 @@ export const updateLorryReceipt = async (req: Request, res: Response) => {
       date: z.string().optional(),
       lorryReceiptId: z.string().optional(),
       vehicleId: z.string().optional(),
-      modeOfTrade: z.enum(['IMPORT', 'EXPORT', 'EMPTY']),
+      modeOfTrade: z.enum(["IMPORT", "EXPORT", "EMPTY"]),
       bookingNo: z.string().optional(),
       containerNo: z.string().optional(),
       lineSeal: z.string().optional(),
@@ -296,19 +458,58 @@ export const updateLorryReceipt = async (req: Request, res: Response) => {
           driverPhone: z.string().optional(),
         })
         .optional(),
+      marketFuelProvidedByUs: z.boolean().optional(),
+      marketTruckFuel: z
+        .object({
+          vendorId: z.string(),
+          date: z.string(),
+          quantity: z.number(),
+          rate: z.number(),
+        })
+        .optional(),
       ownOrganization: z.boolean().optional(),
       organizationDetails: z.string().optional(),
     })
     .superRefine(
-      ({ ownOrganization, organizationDetails }, refinementContext) => {
+      (
+        {
+          ownOrganization,
+          organizationDetails,
+          ownVehicle,
+          marketTruckDetails,
+          marketFuelProvidedByUs,
+          marketTruckFuel,
+        },
+        refinementContext,
+      ) => {
         if (ownOrganization === false && !organizationDetails) {
           return refinementContext.addIssue({
             code: z.ZodIssueCode.custom,
-            message: 'Please provide organizationDetails',
-            path: ['organizationDetails'],
+            message: "Please provide organizationDetails",
+            path: ["organizationDetails"],
           });
         }
-      }
+
+        if (ownVehicle === false && !marketTruckDetails) {
+          return refinementContext.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Please provide marketTruckDetails",
+            path: ["marketTruckDetails"],
+          });
+        }
+
+        if (
+          ownVehicle === false &&
+          marketFuelProvidedByUs === true &&
+          !marketTruckFuel
+        ) {
+          return refinementContext.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Please provide marketTruckFuel details",
+            path: ["marketTruckFuel"],
+          });
+        }
+      },
     );
 
   const session = await db.startSession();
@@ -317,10 +518,11 @@ export const updateLorryReceipt = async (req: Request, res: Response) => {
   session.startTransaction();
 
   try {
-    lorryReceiptValidator.parse(req.body);
+    const validatedPayload = lorryReceiptValidator.parse(req.body);
 
     const { userId } = res.locals.user;
-    const { lrId, ...lorryReceiptReqPayload } = req.body;
+    const { lrId, marketTruckFuel, ...lorryReceiptReqPayload } =
+      validatedPayload;
 
     // Find Lorry receipt with lrId
     const lorryReceipt = await LorryReceipt.findOne({
@@ -328,6 +530,15 @@ export const updateLorryReceipt = async (req: Request, res: Response) => {
     });
 
     if (!lorryReceipt) throw new Error(`Lorry receipt with ${lrId} not found`);
+
+    const effectiveOwnVehicle =
+      lorryReceiptReqPayload?.ownVehicle ?? lorryReceipt.ownVehicle;
+    const effectiveMarketFuelProvidedByUs =
+      effectiveOwnVehicle === true
+        ? false
+        : (lorryReceiptReqPayload?.marketFuelProvidedByUs ??
+          lorryReceipt.marketFuelProvidedByUs ??
+          false);
 
     if (
       lorryReceiptReqPayload?.lorryReceiptId !== lorryReceipt.lorryReceiptId
@@ -342,7 +553,7 @@ export const updateLorryReceipt = async (req: Request, res: Response) => {
 
       if (sameLorryReceipt)
         throw new Error(
-          `Lorry receipt with ${lorryReceiptReqPayload?.lorryReceiptId} already exists`
+          `Lorry receipt with ${lorryReceiptReqPayload?.lorryReceiptId} already exists`,
         );
     }
 
@@ -351,19 +562,167 @@ export const updateLorryReceipt = async (req: Request, res: Response) => {
       { _id: lrId },
       {
         ...lorryReceiptReqPayload,
+        marketFuelProvidedByUs: effectiveMarketFuelProvidedByUs,
         containerStatus:
-          lorryReceiptReqPayload?.modeOfTrade === 'EMPTY' ? 'EMPTY' : 'LOADED',
+          (lorryReceiptReqPayload?.modeOfTrade || lorryReceipt.modeOfTrade) ===
+          "EMPTY"
+            ? "EMPTY"
+            : "LOADED",
       },
-      { new: true, session: session }
+      { new: true, session: session },
     );
 
     if (!updatedLorryReceipt)
       throw new Error(`Lorry receipt with ${lrId} not found`);
 
+    if (effectiveOwnVehicle === false && effectiveMarketFuelProvidedByUs) {
+      if (!marketTruckFuel && !lorryReceipt.marketTruckFuelId) {
+        throw new Error("Please provide marketTruckFuel details");
+      }
+
+      if (marketTruckFuel) {
+        const vendor = await Vendor.findOne({
+          _id: marketTruckFuel.vendorId,
+          createdBy: userId,
+        }).session(session);
+
+        if (!vendor) throw new Error("Vendor not found");
+
+        const parsedQuantity = parseFloat(marketTruckFuel.quantity.toString());
+        const parsedRate = parseFloat(marketTruckFuel.rate.toString());
+
+        if (
+          isNaN(parsedQuantity) ||
+          isNaN(parsedRate) ||
+          parsedQuantity <= 0 ||
+          parsedRate <= 0
+        ) {
+          throw new Error("Invalid market truck fuel quantity or rate");
+        }
+
+        const totalAmount = parsedQuantity * parsedRate;
+        const marketFuelPayload = {
+          lorryReceiptId: updatedLorryReceipt._id,
+          vendorId: marketTruckFuel.vendorId,
+          date: new Date(marketTruckFuel.date),
+          quantity: new db.Types.Decimal128(parsedQuantity.toString()),
+          rate: new db.Types.Decimal128(parsedRate.toString()),
+          totalAmount: new db.Types.Decimal128(totalAmount.toString()),
+          createdBy: userId,
+        };
+
+        if (lorryReceipt.marketTruckFuelId) {
+          const existingMarketTruckFuel = await MarketTruckFuel.findOne({
+            _id: lorryReceipt.marketTruckFuelId,
+            createdBy: userId,
+          }).session(session);
+
+          if (!existingMarketTruckFuel)
+            throw new Error("Market truck fuel record not found");
+
+          const oldVendorId = existingMarketTruckFuel.vendorId.toString();
+          const oldTotalAmount = parseAmount(
+            existingMarketTruckFuel.totalAmount,
+          );
+
+          if (oldVendorId !== marketTruckFuel.vendorId) {
+            await applyVendorAmountDelta({
+              vendorId: oldVendorId,
+              amountDelta: -oldTotalAmount,
+              userId,
+              session,
+            });
+            await applyVendorAmountDelta({
+              vendorId: marketTruckFuel.vendorId,
+              amountDelta: totalAmount,
+              userId,
+              session,
+            });
+          } else {
+            const amountDelta = totalAmount - oldTotalAmount;
+            if (amountDelta !== 0) {
+              await applyVendorAmountDelta({
+                vendorId: oldVendorId,
+                amountDelta,
+                userId,
+                session,
+              });
+            }
+          }
+
+          const updatedMarketTruckFuel = await MarketTruckFuel.findOneAndUpdate(
+            {
+              _id: lorryReceipt.marketTruckFuelId,
+              createdBy: userId,
+            },
+            marketFuelPayload,
+            { new: true, session },
+          );
+
+          if (!updatedMarketTruckFuel)
+            throw new Error("Market truck fuel record not found");
+        } else {
+          const newMarketTruckFuel = new MarketTruckFuel(marketFuelPayload);
+          const registeredMarketTruckFuel = await newMarketTruckFuel.save({
+            session,
+          });
+
+          if (!registeredMarketTruckFuel)
+            throw new Error("Market truck fuel record not created");
+
+          await applyVendorAmountDelta({
+            vendorId: marketTruckFuel.vendorId,
+            amountDelta: totalAmount,
+            userId,
+            session,
+          });
+
+          await LorryReceipt.findOneAndUpdate(
+            { _id: updatedLorryReceipt._id, createdBy: userId },
+            { marketTruckFuelId: registeredMarketTruckFuel._id },
+            { new: true, session },
+          );
+        }
+      }
+    } else if (lorryReceipt.marketTruckFuelId) {
+      const existingMarketTruckFuel = await MarketTruckFuel.findOne({
+        _id: lorryReceipt.marketTruckFuelId,
+        createdBy: userId,
+      }).session(session);
+
+      if (!existingMarketTruckFuel)
+        throw new Error("Market truck fuel record not found");
+
+      await applyVendorAmountDelta({
+        vendorId: existingMarketTruckFuel.vendorId.toString(),
+        amountDelta: -parseAmount(existingMarketTruckFuel.totalAmount),
+        userId,
+        session,
+      });
+
+      await MarketTruckFuel.deleteOne(
+        { _id: lorryReceipt.marketTruckFuelId, createdBy: userId },
+        { session },
+      );
+
+      await LorryReceipt.findOneAndUpdate(
+        { _id: updatedLorryReceipt._id, createdBy: userId },
+        {
+          $set: { marketFuelProvidedByUs: false },
+          $unset: { marketTruckFuelId: "" },
+        },
+        { new: true, session },
+      );
+    }
+
     if (
       lorryReceiptReqPayload?.ownVehicle === true &&
       lorryReceiptReqPayload?.diesel !== lorryReceipt?.diesel
     ) {
+      const dieselToSet = lorryReceiptReqPayload.diesel;
+      if (dieselToSet === undefined)
+        throw new Error("Please provide diesel to update own vehicle fuel");
+
       // update the vehicle?.fuel?.available quantity by adding the old quantity and then reducing the new quantity
       const vehicle = await Vehicle.findOne({
         _id: updatedLorryReceipt?.vehicleId,
@@ -374,15 +733,14 @@ export const updateLorryReceipt = async (req: Request, res: Response) => {
       const newFuelOfVehicle =
         vehicle?.fuel?.availableFuel! + lorryReceipt?.diesel!;
 
-      if (newFuelOfVehicle < lorryReceiptReqPayload?.diesel)
-        throw new Error('Fuel not enough');
+      if (newFuelOfVehicle < dieselToSet) throw new Error("Fuel not enough");
 
-      const caculatedFuel = newFuelOfVehicle - lorryReceiptReqPayload?.diesel!;
+      const caculatedFuel = newFuelOfVehicle - dieselToSet;
 
       const updatedVehicle = await Vehicle.findOneAndUpdate(
         { _id: updatedLorryReceipt?.vehicleId },
         { fuel: { availableFuel: caculatedFuel } },
-        { new: true, session: session }
+        { new: true, session: session },
       );
 
       if (!updatedVehicle) throw new Error(`Vehicle with ${lrId} not found`);
@@ -397,16 +755,14 @@ export const updateLorryReceipt = async (req: Request, res: Response) => {
 
       const newFuelOfDriver = driver?.availableFuel! + lorryReceipt?.diesel!;
 
-      if (newFuelOfDriver < lorryReceiptReqPayload?.diesel)
-        throw new Error('Fuel not enough');
+      if (newFuelOfDriver < dieselToSet) throw new Error("Fuel not enough");
 
-      const calculatedDriverFuel =
-        newFuelOfDriver - lorryReceiptReqPayload?.diesel!;
+      const calculatedDriverFuel = newFuelOfDriver - dieselToSet;
 
       const updatedDriver = await Driver.findOneAndUpdate(
         { _id: driver?._id },
         { availableFuel: calculatedDriverFuel },
-        { new: true, session: session }
+        { new: true, session: session },
       );
 
       if (!updatedDriver) throw new Error(`Driver with ${lrId} not found`);
@@ -416,12 +772,12 @@ export const updateLorryReceipt = async (req: Request, res: Response) => {
     session.endSession();
 
     handleSuccess(res, {
-      message: 'Lorry receipt updated successfully',
+      message: "Lorry receipt updated successfully",
       data: updatedLorryReceipt,
     });
   } catch (error) {
     handleErrors(req, res, {
-      message: 'Error while updating lorry receipt',
+      message: "Error while updating lorry receipt",
       error,
     });
   }
@@ -455,42 +811,42 @@ export const printLorryReceipt = async (req: Request, res: Response) => {
     }
 
     if (ledgerIds) {
-      const billingParty = ledgerIds.split(',');
+      const billingParty = ledgerIds.split(",");
       lorryReceiptCondition.billingParty = { $in: billingParty };
     }
 
     if (vehicleIds) {
-      const vehicleId = vehicleIds.split(',');
+      const vehicleId = vehicleIds.split(",");
       lorryReceiptCondition.vehicleId = { $in: vehicleId };
     }
 
     const lorryReceipts = await LorryReceipt.find(lorryReceiptCondition)
-      .populate('billingParty', ['legalName'])
+      .populate("billingParty", ["legalName"])
       .populate({
-        path: 'vehicleId',
-        model: 'Vehicle',
-        select: 'registration.plateNumber',
+        path: "vehicleId",
+        model: "Vehicle",
+        select: "registration.plateNumber",
         populate: {
-          path: 'assignedDriver',
-          model: 'Driver',
+          path: "assignedDriver",
+          model: "Driver",
           select: {
             firstName: 1,
             lastName: 1,
-            'phoneNumber.primary': 1,
+            "phoneNumber.primary": 1,
           },
         },
       })
-      .populate('organizationDetails');
+      .populate("organizationDetails");
 
-    if (!lorryReceipts) throw new Error('Lorry receipt not found');
+    if (!lorryReceipts) throw new Error("Lorry receipt not found");
 
     handleSuccess(res, {
-      message: 'Lorry receipt fetched successfully',
+      message: "Lorry receipt fetched successfully",
       data: lorryReceipts,
     });
   } catch (error) {
     handleErrors(req, res, {
-      message: 'Error while fetching lorry receipt',
+      message: "Error while fetching lorry receipt",
       error,
     });
   }
@@ -498,7 +854,7 @@ export const printLorryReceipt = async (req: Request, res: Response) => {
 
 export const getOtherOrganizationNameFromLRByLedger = async (
   req: Request,
-  res: Response
+  res: Response,
 ) => {
   try {
     const {
@@ -511,14 +867,14 @@ export const getOtherOrganizationNameFromLRByLedger = async (
       {
         $match: {
           ownOrganization: false,
-          invoiceStatus: 'PENDING',
+          invoiceStatus: "PENDING",
           billingParty: new db.Types.ObjectId(ledgerId),
           createdBy: new db.Types.ObjectId(userId),
         },
       },
       {
         $group: {
-          _id: '$organizationDetails',
+          _id: "$organizationDetails",
         },
       },
     ]);
@@ -531,7 +887,7 @@ export const getOtherOrganizationNameFromLRByLedger = async (
       createdBy: userId,
     });
 
-    if (!otherOrganizations) throw new Error('No are other organizations');
+    if (!otherOrganizations) throw new Error("No are other organizations");
 
     // Convert it into array of label and value
     const newOtherOrg = otherOrganizations.map((organization) => {
@@ -547,12 +903,12 @@ export const getOtherOrganizationNameFromLRByLedger = async (
     });
 
     handleSuccess(res, {
-      message: 'Other organizations fetched successfully',
+      message: "Other organizations fetched successfully",
       data: newOtherOrg,
     });
   } catch (error) {
     handleErrors(req, res, {
-      message: 'Error while fetching other organizations',
+      message: "Error while fetching other organizations",
       error,
     });
   }
@@ -560,54 +916,55 @@ export const getOtherOrganizationNameFromLRByLedger = async (
 
 export const getPendingLorryReceiptByLedger = async (
   req: Request,
-  res: Response
+  res: Response,
 ) => {
   try {
     const { userId } = res.locals.user;
     const { ledgerId, ownOrganization, otherOrganization }: any = req.query;
-    const boolOwnOrganization = ownOrganization === 'true' ? true : false;
+    const boolOwnOrganization = ownOrganization === "true" ? true : false;
 
     const lorryReceipts = await LorryReceipt.find(
       {
         createdBy: userId,
         billingParty: ledgerId,
-        invoiceStatus: 'PENDING',
+        invoiceStatus: "PENDING",
         ownOrganization: boolOwnOrganization,
         ...(boolOwnOrganization === false && {
           organizationDetails: otherOrganization,
         }),
       },
       [
-        'date',
-        'lorryReceiptId',
-        'bookingNo',
-        'from',
-        'to',
-        'containerNo',
-        'containerSize',
-        'rate',
-        'detentionAmount',
-        'ownVehicle',
-        'marketTruckDetails.vehiclePlateNumber',
-        'ownOrganization',
+        "date",
+        "lorryReceiptId",
+        "bookingNo",
+        "from",
+        "to",
+        "containerNo",
+        "containerSize",
+        "rate",
+        "detentionAmount",
+        "ownVehicle",
+        "marketFuelProvidedByUs",
+        "marketTruckDetails.vehiclePlateNumber",
+        "ownOrganization",
       ],
       {
         sort: {
           createdAt: -1,
         },
-      }
+      },
     )
-      .populate('billingParty', ['legalName'])
-      .populate('vehicleId', ['registration.plateNumber'])
-      .populate('organizationDetails');
+      .populate("billingParty", ["legalName"])
+      .populate("vehicleId", ["registration.plateNumber"])
+      .populate("organizationDetails");
 
-    if (!lorryReceipts) throw new Error('Lorry receipt not found');
+    if (!lorryReceipts) throw new Error("Lorry receipt not found");
 
     // count documents
     const count = await LorryReceipt.countDocuments({
       createdBy: userId,
       billingParty: ledgerId,
-      invoiceStatus: 'PENDING',
+      invoiceStatus: "PENDING",
       ownOrganization: boolOwnOrganization,
       ...(boolOwnOrganization === false && {
         organizationDetails: otherOrganization,
@@ -623,7 +980,7 @@ export const getPendingLorryReceiptByLedger = async (
     }));
 
     handleSuccess(res, {
-      message: 'Lorry receipt fetched successfully',
+      message: "Lorry receipt fetched successfully",
       data: {
         data: newLorryReceipt,
         count,
@@ -631,7 +988,7 @@ export const getPendingLorryReceiptByLedger = async (
     });
   } catch (error) {
     handleErrors(req, res, {
-      message: 'Error while fetching lorry receipt',
+      message: "Error while fetching lorry receipt",
       error,
     });
   }
@@ -639,7 +996,7 @@ export const getPendingLorryReceiptByLedger = async (
 
 export const updateManyLorryReceiptStatus = async (
   req: Request,
-  res: Response
+  res: Response,
 ) => {
   try {
     const { userId } = res.locals.user;
@@ -652,18 +1009,18 @@ export const updateManyLorryReceiptStatus = async (
       },
       {
         $set: { invoiceStatus: newStatus },
-      }
+      },
     );
 
-    if (!lorryReceipt) throw new Error('Lorry receipt not found');
+    if (!lorryReceipt) throw new Error("Lorry receipt not found");
 
     handleSuccess(res, {
-      message: 'Lorry receipt status updated successfully',
+      message: "Lorry receipt status updated successfully",
       data: lorryReceipt,
     });
   } catch (error) {
     handleErrors(req, res, {
-      message: 'Error while updating lorry receipt status',
+      message: "Error while updating lorry receipt status",
       error,
     });
   }
@@ -671,7 +1028,7 @@ export const updateManyLorryReceiptStatus = async (
 
 export const updateManyLRStatusByLRInvoiceId = async (
   req: Request,
-  res: Response
+  res: Response,
 ) => {
   try {
     const { userId } = res.locals.user;
@@ -682,10 +1039,10 @@ export const updateManyLRStatusByLRInvoiceId = async (
         _id: lorryReceiptInvoiceId,
         createdBy: userId,
       },
-      ['lorryReceiptIds']
+      ["lorryReceiptIds"],
     );
 
-    if (!LRIds) throw new Error('Lorry receipt not found');
+    if (!LRIds) throw new Error("Lorry receipt not found");
 
     // Update the status of LRIds to newStatus
     const lorryReceiptUpdated = await LorryReceipt.updateMany(
@@ -696,17 +1053,17 @@ export const updateManyLRStatusByLRInvoiceId = async (
       },
       {
         $set: { invoiceStatus: newStatus },
-      }
+      },
     );
 
-    if (!lorryReceiptUpdated) throw new Error('Lorry receipt not updated');
+    if (!lorryReceiptUpdated) throw new Error("Lorry receipt not updated");
 
     handleSuccess(res, {
-      message: 'Lorry receipt status updated successfully',
+      message: "Lorry receipt status updated successfully",
     });
   } catch (error) {
     handleErrors(req, res, {
-      message: 'Error while updating lorry receipt status',
+      message: "Error while updating lorry receipt status",
       error,
     });
   }

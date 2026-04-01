@@ -121,3 +121,6 @@ export const constructAmount = (data: number | string) => {
     });
   }
 };
+
+export const toNumber = (value: unknown) => parseFloat(value?.toString() || "0");
+export const parseAmount = (value: unknown) => parseFloat(value?.toString() || "0");
