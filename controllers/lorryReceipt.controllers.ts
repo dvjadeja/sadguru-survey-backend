@@ -390,29 +390,35 @@ export const getLorryReceipt = async (req: Request, res: Response) => {
 
     if (!lorryReceipt) throw new Error(`Lorry receipt with ${id} not found`);
 
-    const marketTruckFuel = await MarketTruckFuel.findOne({
-      _id: lorryReceipt.marketTruckFuelId,
-      createdBy: userId,
-    }).populate("vendorId", ["name"]);
-
-    if (!marketTruckFuel) throw new Error("Market truck fuel not found");
-
-    const marketTruckFuelData = marketTruckFuel.toObject();
-
-    // Decimal128 to Number
-    const quantity = toNumber(marketTruckFuelData.quantity);
-    const rate = toNumber(marketTruckFuelData.rate);
-    const totalAmount = toNumber(marketTruckFuelData.totalAmount);
-
-    const responseData = {
+    let responseData: Record<string, any> = {
       ...lorryReceipt.toObject(),
-      marketTruckFuelId: {
+    };
+
+    if (
+      lorryReceipt.ownVehicle === false &&
+      lorryReceipt.marketFuelProvidedByUs === true
+    ) {
+      const marketTruckFuel = await MarketTruckFuel.findOne({
+        _id: lorryReceipt.marketTruckFuelId,
+        createdBy: userId,
+      }).populate("vendorId", ["name"]);
+
+      if (!marketTruckFuel) throw new Error("Market truck fuel not found");
+
+      const marketTruckFuelData = marketTruckFuel.toObject();
+
+      // Decimal128 to Number
+      const quantity = toNumber(marketTruckFuelData.quantity);
+      const rate = toNumber(marketTruckFuelData.rate);
+      const totalAmount = toNumber(marketTruckFuelData.totalAmount);
+
+      responseData.marketTruckFuelId = {
         ...marketTruckFuelData,
         quantity: quantity,
         rate: rate,
         totalAmount: totalAmount,
-      },
-    };
+      };
+    }
 
     handleSuccess(res, {
       message: "Lorry receipt fetched successfully",
