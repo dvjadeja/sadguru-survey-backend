@@ -4,6 +4,7 @@ import { z } from "zod";
 import db from "../setups/mongo";
 import { LorryReceipt, MarketTruckFuel, Vendor } from "../models";
 import { handleErrors, handleSuccess } from "../utils/response.utils";
+import { escapeRegex, getStartAndEnd } from "../utils/utilities";
 
 const toNumber = (value: unknown) => parseFloat(value?.toString() || "0");
 const parseAmount = (value: unknown) => parseFloat(value?.toString() || "0");
@@ -39,28 +40,129 @@ const applyVendorAmountDelta = async ({
 export const listMarketTruckFuel = async (req: Request, res: Response) => {
   try {
     const { userId } = res.locals.user;
-    const { page = 0, limit = 10 }: any = req.query;
+    const { page = 0, limit = 10, search }: any = req.query;
+    const parsedPage = Number.parseInt(page?.toString() || "0", 10);
+    const parsedLimit = Number.parseInt(limit?.toString() || "10", 10);
+    const safePage =
+      Number.isNaN(parsedPage) || parsedPage < 0 ? 0 : parsedPage;
+    const safeLimit =
+      Number.isNaN(parsedLimit) || parsedLimit <= 0
+        ? 10
+        : Math.min(parsedLimit, 100);
 
-    const marketTruckFuel = await MarketTruckFuel.find(
-      { createdBy: userId },
-      ["date", "quantity", "rate", "totalAmount", "lorryReceiptId"],
+    const normalizedSearch = search?.toString().trim();
+
+    const pipeline: any[] = [
       {
-        sort: { createdAt: -1 },
-        skip: parseInt(page) * parseInt(limit),
-        limit: parseInt(limit),
-      }
-    )
-      .populate("vendorId", ["name"])
-      .populate("lorryReceiptId", ["lorryReceiptId"]);
+        $match: {
+          createdBy: new db.Types.ObjectId(userId),
+        },
+      },
+      {
+        $lookup: {
+          from: "vendors",
+          localField: "vendorId",
+          foreignField: "_id",
+          as: "vendor",
+        },
+      },
+      {
+        $unwind: {
+          path: "$vendor",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $lookup: {
+          from: "lorryreceipts",
+          localField: "lorryReceiptId",
+          foreignField: "_id",
+          as: "lorryReceipt",
+        },
+      },
+      {
+        $unwind: {
+          path: "$lorryReceipt",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $addFields: {
+          vendorName: { $ifNull: ["$vendor.name", ""] },
+          lorryReceiptNo: { $ifNull: ["$lorryReceipt.lorryReceiptId", ""] },
+          quantityNumber: { $toDouble: "$quantity" },
+          rateNumber: { $toDouble: "$rate" },
+          totalAmountNumber: { $toDouble: "$totalAmount" },
+          quantityText: { $toString: "$quantity" },
+          rateText: { $toString: "$rate" },
+          totalAmountText: { $toString: "$totalAmount" },
+          dateText: {
+            $dateToString: {
+              date: "$date",
+              format: "%Y-%m-%d",
+            },
+          },
+        },
+      },
+    ];
 
-    const count = await MarketTruckFuel.countDocuments({ createdBy: userId });
+    if (normalizedSearch) {
+      const searchRegex = new RegExp(escapeRegex(normalizedSearch), "i");
+      pipeline.push({
+        $match: {
+          $or: [
+            { vendorName: { $regex: searchRegex } },
+            { lorryReceiptNo: { $regex: searchRegex } },
+            { quantityText: { $regex: searchRegex } },
+            { rateText: { $regex: searchRegex } },
+            { totalAmountText: { $regex: searchRegex } },
+            { dateText: { $regex: searchRegex } },
+          ],
+        },
+      });
+    }
 
-    const formattedData = marketTruckFuel.map((fuel) => ({
-      ...fuel.toObject(),
-      quantity: fuel.quantity?.toString(),
-      rate: fuel.rate?.toString(),
-      totalAmount: fuel.totalAmount?.toString(),
-    }));
+    pipeline.push(
+      { $sort: { createdAt: -1 } },
+      {
+        $facet: {
+          results: [
+            { $skip: safePage * safeLimit },
+            { $limit: safeLimit },
+            {
+              $project: {
+                _id: 1,
+                lorryReceiptId: "$lorryReceiptNo",
+                vendorId: "$vendorName",
+                marketTruckDetails: {
+                  companyName: {
+                    $ifNull: [
+                      "$lorryReceipt.marketTruckDetails.companyName",
+                      "",
+                    ],
+                  },
+                  vehiclePlateNumber: {
+                    $ifNull: [
+                      "$lorryReceipt.marketTruckDetails.vehiclePlateNumber",
+                      "",
+                    ],
+                  },
+                },
+                date: 1,
+                quantity: "$quantityNumber",
+                rate: "$rateNumber",
+                totalAmount: "$totalAmountNumber",
+              },
+            },
+          ],
+          metadata: [{ $count: "count" }],
+        },
+      },
+    );
+
+    const [aggregatedResult] = await MarketTruckFuel.aggregate(pipeline);
+    const formattedData = aggregatedResult?.results || [];
+    const count = aggregatedResult?.metadata?.[0]?.count || 0;
 
     handleSuccess(res, {
       message: "Market truck fuel list fetched successfully",
@@ -179,7 +281,7 @@ export const createMarketTruckFuel = async (req: Request, res: Response) => {
         marketFuelProvidedByUs: true,
         marketTruckFuelId: registeredMarketTruckFuel._id,
       },
-      { new: true, session }
+      { new: true, session },
     );
 
     await session.commitTransaction();
@@ -239,7 +341,9 @@ export const updateMarketTruckFuel = async (req: Request, res: Response) => {
         ? toNumber(payload.quantity)
         : toNumber(marketTruckFuel.quantity);
     const rate =
-      payload.rate !== undefined ? toNumber(payload.rate) : toNumber(marketTruckFuel.rate);
+      payload.rate !== undefined
+        ? toNumber(payload.rate)
+        : toNumber(marketTruckFuel.rate);
 
     if (isNaN(quantity) || isNaN(rate) || quantity <= 0 || rate <= 0) {
       throw new Error("Invalid market truck fuel quantity or rate");
@@ -276,10 +380,13 @@ export const updateMarketTruckFuel = async (req: Request, res: Response) => {
     marketTruckFuel.quantity = new db.Types.Decimal128(quantity.toString());
     marketTruckFuel.rate = new db.Types.Decimal128(rate.toString());
     marketTruckFuel.totalAmount = new db.Types.Decimal128(
-      newTotalAmount.toString()
+      newTotalAmount.toString(),
     );
 
-    if (payload.lorryReceiptId && payload.lorryReceiptId !== oldLorryReceiptId) {
+    if (
+      payload.lorryReceiptId &&
+      payload.lorryReceiptId !== oldLorryReceiptId
+    ) {
       const nextLorryReceipt = await LorryReceipt.findOne({
         _id: payload.lorryReceiptId,
         createdBy: userId,
@@ -287,7 +394,9 @@ export const updateMarketTruckFuel = async (req: Request, res: Response) => {
 
       if (!nextLorryReceipt) throw new Error("Lorry receipt not found");
       if (nextLorryReceipt.ownVehicle) {
-        throw new Error("Market truck fuel can only be linked to market truck LR");
+        throw new Error(
+          "Market truck fuel can only be linked to market truck LR",
+        );
       }
 
       await LorryReceipt.findOneAndUpdate(
@@ -296,7 +405,7 @@ export const updateMarketTruckFuel = async (req: Request, res: Response) => {
           $set: { marketFuelProvidedByUs: false },
           $unset: { marketTruckFuelId: "" },
         },
-        { new: true, session }
+        { new: true, session },
       );
 
       await LorryReceipt.findOneAndUpdate(
@@ -305,7 +414,7 @@ export const updateMarketTruckFuel = async (req: Request, res: Response) => {
           marketFuelProvidedByUs: true,
           marketTruckFuelId: marketTruckFuel._id,
         },
-        { new: true, session }
+        { new: true, session },
       );
     } else {
       await LorryReceipt.findOneAndUpdate(
@@ -314,7 +423,7 @@ export const updateMarketTruckFuel = async (req: Request, res: Response) => {
           marketFuelProvidedByUs: true,
           marketTruckFuelId: marketTruckFuel._id,
         },
-        { new: true, session }
+        { new: true, session },
       );
     }
 
@@ -373,10 +482,13 @@ export const deleteMarketTruckFuel = async (req: Request, res: Response) => {
         $set: { marketFuelProvidedByUs: false },
         $unset: { marketTruckFuelId: "" },
       },
-      { new: true, session }
+      { new: true, session },
     );
 
-    await MarketTruckFuel.deleteOne({ _id: id, createdBy: userId }, { session });
+    await MarketTruckFuel.deleteOne(
+      { _id: id, createdBy: userId },
+      { session },
+    );
 
     await session.commitTransaction();
     session.endSession();
@@ -389,6 +501,102 @@ export const deleteMarketTruckFuel = async (req: Request, res: Response) => {
     session.endSession();
     handleErrors(req, res, {
       message: "Error while deleting market truck fuel",
+      error,
+    });
+  }
+};
+
+export const printMarketFuel = async (req: Request, res: Response) => {
+  try {
+    const { userId } = res.locals.user;
+    const { startDate, endDate, vendorIds, singleDate }: any = req.query;
+
+    const marketTruckFuelCondition: any = {
+      createdBy: new db.Types.ObjectId(userId),
+    };
+
+    if (startDate && endDate) {
+      marketTruckFuelCondition.date = {
+        $gte: new Date(startDate),
+        $lte: new Date(endDate),
+      };
+    }
+
+    if (singleDate) {
+      const { startDate: singleStartDate, endDate: singleEndDate } =
+        getStartAndEnd(singleDate);
+
+      marketTruckFuelCondition.date = {
+        $gte: new Date(singleStartDate),
+        $lt: new Date(singleEndDate),
+      };
+    }
+
+    if (vendorIds) {
+      const vendorId = vendorIds
+        .split(",")
+        .filter((id: string) => db.Types.ObjectId.isValid(id))
+        .map((id: string) => new db.Types.ObjectId(id));
+
+      marketTruckFuelCondition.vendorId = { $in: vendorId };
+    }
+
+    const marketTruckFuel = await MarketTruckFuel.aggregate([
+      { $match: marketTruckFuelCondition },
+      {
+        $lookup: {
+          from: "lorryreceipts",
+          localField: "lorryReceiptId",
+          foreignField: "_id",
+          as: "lorryReceipt",
+        },
+      },
+      {
+        $unwind: {
+          path: "$lorryReceipt",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $lookup: {
+          from: "vendors",
+          localField: "vendorId",
+          foreignField: "_id",
+          as: "vendor",
+        },
+      },
+      {
+        $unwind: {
+          path: "$vendor",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $sort: { createdAt: -1 },
+      },
+      {
+        $project: {
+          _id: 1,
+          lorryReceiptId: "$lorryReceipt.lorryReceiptId",
+          vendorId: "$vendor.name",
+          marketTruckDetails: {
+            $ifNull: ["$lorryReceipt.marketTruckDetails", {}],
+          },
+          date: 1,
+          quantity: { $toDouble: "$quantity" },
+          rate: { $toDouble: "$rate" },
+          totalAmount: { $toDouble: "$totalAmount" },
+        },
+      },
+    ]);
+
+    handleSuccess(res, {
+      message: "Market truck fuel fetched successfully",
+      data: marketTruckFuel,
+    });
+  } catch (error) {
+    handleErrors(req, res, {
+      message: "Error while printing market truck fuel",
       error,
     });
   }
